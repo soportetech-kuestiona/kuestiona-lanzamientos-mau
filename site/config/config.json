@@ -1,0 +1,102 @@
+{
+  "backend_web_app_url": "PENDIENTE_URL_APPS_SCRIPT_DEPLOY",
+  "funnel_name": "mau-lanz-2609",
+  "product_interest_id": "autoconocimiento",
+  "origin": "landing-mau-lz",
+  "ac_automation_no_cualifica": 20,
+  "ac_tags": {
+    "base": "MAU-LZ",
+    "latam": "LATAM",
+    "no_latam": "no-LATAM"
+  },
+  "sheet_id": "1HWb5k_viFg-DB0SxlDfwyKxzoYQoERQ7YqMekV3VC-I",
+  "sheet_tab": "Leads",
+  "calendly": {
+    "event_name": "Asesoramiento - Máster en Autoconocimiento (LZ)",
+    "url": "https://calendly.com/kuestiona-team/asesoramiento-master-en-autoconocimiento-lz"
+  },
+  "questions": {
+    "q1_disponibilidad": {
+      "text": "Esta formación dura 6 meses y requiere un compromiso de dedicación de 4-5 horas semanales, ¿tienes esa disponibilidad?",
+      "options": {
+        "a": "Sí, puedo dedicar unas 4 horas semanales",
+        "b": "Sí, aunque no siempre podré conectarme en directo",
+        "c": "Podría, pero debo organizarme",
+        "d": "Ahora mismo no podría comprometer ese tiempo"
+      }
+    },
+    "q2_disposicion_invertir": {
+      "text": "¿Estás dispuesto a invertir en tu desarrollo personal?",
+      "options": {
+        "a": "Sí, tengo recursos",
+        "b": "Sí, pero necesitaría financiación",
+        "c": "Ahora mismo no puedo invertir"
+      }
+    },
+    "q3_situacion_laboral": {
+      "text": "¿Cuál es tu situación laboral actualmente?",
+      "options": {
+        "a": "Empleado",
+        "b": "Desempleado",
+        "c": "Autónomo",
+        "d": "Empresario",
+        "e": "Directivo"
+      }
+    },
+    "q4_capacidad_inversion": {
+      "text": "¿Cuál es tu capacidad de inversión en este momento?",
+      "options": {
+        "a": "Menos de 1.000€",
+        "b": "No estoy seguro",
+        "c": "Entre 1.000€ y 2.000€",
+        "d": "Más de 2.000€"
+      },
+      "only_if_latam": true
+    },
+    "open_q1_cambio_mejora": {
+      "text": "¿Qué te gustaría cambiar o mejorar de ti en tu proceso de evolución personal?"
+    },
+    "open_q2_por_que_no_logrado": {
+      "text": "¿Por qué crees que no lo has conseguido aún?"
+    }
+  },
+  "gate_rules": {
+    "q1_fail_options": ["d"],
+    "q2_fail_options": ["c"],
+    "q4_pass_options_if_latam": ["c", "d"]
+  },
+  "latam_detection": {
+    "phone_prefixes": {
+      "52": "México",
+      "54": "Argentina",
+      "57": "Colombia",
+      "51": "Perú",
+      "56": "Chile",
+      "593": "Ecuador",
+      "58": "Venezuela",
+      "502": "Guatemala",
+      "503": "El Salvador",
+      "504": "Honduras",
+      "505": "Nicaragua",
+      "506": "Costa Rica",
+      "507": "Panamá",
+      "509": "Haití",
+      "598": "Uruguay",
+      "595": "Paraguay",
+      "591": "Bolivia",
+      "55": "Brasil"
+    },
+    "excluded_ambiguous_prefixes": ["1"],
+    "timezones": [
+      "America/Mexico_City", "America/Tijuana", "America/Cancun", "America/Merida", "America/Monterrey",
+      "America/Bogota", "America/Lima", "America/Santiago",
+      "America/Guayaquil", "America/Caracas", "America/Guatemala",
+      "America/El_Salvador", "America/Tegucigalpa", "America/Managua",
+      "America/Costa_Rica", "America/Panama", "America/Port-au-Prince",
+      "America/Montevideo", "America/Asuncion", "America/La_Paz",
+      "America/Sao_Paulo", "America/Manaus", "America/Recife", "America/Fortaleza", "America/Belem",
+      "America/Argentina/Buenos_Aires", "America/Argentina/Cordoba", "America/Argentina/Mendoza",
+      "America/Santo_Domingo"
+    ]
+  }
+}

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Máster en Autoconocimiento — Precalificación</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <main class="wizard" id="wizard">
+
+    <!-- Paso 0: intro -->
+    <section class="step" id="step-intro" data-step="intro">
+      <h1>Máster en Autoconocimiento</h1>
+      <p class="lead">
+        Antes de darte acceso a una sesión de asesoramiento con el equipo, queremos
+        conocerte un poco. Son 4 preguntas rápidas.
+      </p>
+      <button type="button" class="btn btn-primary" data-action="start">Empezar</button>
+    </section>
+
+    <!-- Paso 1: datos de contacto -->
+    <section class="step" id="step-contact" data-step="contact" hidden>
+      <h2>Tus datos</h2>
+      <label>
+        Nombre
+        <input type="text" id="input-first-name" autocomplete="given-name" required />
+      </label>
+      <label>
+        Apellidos
+        <input type="text" id="input-last-name" autocomplete="family-name" required />
+      </label>
+      <label>
+        Email
+        <input type="email" id="input-email" autocomplete="email" required />
+      </label>
+      <label>
+        Teléfono (con prefijo internacional)
+        <input type="tel" id="input-phone" placeholder="+34 600 000 000" autocomplete="tel" required />
+      </label>
+      <p class="error" id="error-contact" hidden></p>
+      <button type="button" class="btn btn-primary" data-action="next-from-contact">Continuar</button>
+    </section>
+
+    <!-- Paso 2: Q1 -->
+    <section class="step" id="step-q1" data-step="q1" hidden>
+      <h2 id="q1-text"></h2>
+      <div class="options" id="q1-options" data-question="q1_disponibilidad"></div>
+      <button type="button" class="btn btn-primary" data-action="next" data-from="q1">Continuar</button>
+    </section>
+
+    <!-- Paso 3: Q2 -->
+    <section class="step" id="step-q2" data-step="q2" hidden>
+      <h2 id="q2-text"></h2>
+      <div class="options" id="q2-options" data-question="q2_disposicion_invertir"></div>
+      <button type="button" class="btn btn-primary" data-action="next" data-from="q2">Continuar</button>
+    </section>
+
+    <!-- Paso 4: Q3 (no filtra, solo contexto) -->
+    <section class="step" id="step-q3" data-step="q3" hidden>
+      <h2 id="q3-text"></h2>
+      <div class="options" id="q3-options" data-question="q3_situacion_laboral"></div>
+      <button type="button" class="btn btn-primary" data-action="next" data-from="q3">Continuar</button>
+    </section>
+
+    <!-- Paso 5: Q4 (solo si LATAM) -->
+    <section class="step" id="step-q4" data-step="q4" hidden>
+      <h2 id="q4-text"></h2>
+      <div class="options" id="q4-options" data-question="q4_capacidad_inversion"></div>
+      <button type="button" class="btn btn-primary" data-action="submit" data-from="q4">Continuar</button>
+    </section>
+
+    <!-- Loading -->
+    <section class="step" id="step-loading" data-step="loading" hidden>
+      <p class="lead">Un momento…</p>
+    </section>
+
+    <!-- Resultado: PASA -->
+    <section class="step" id="step-pass" data-step="pass" hidden>
+      <h2>¡Perfecto! Reserva tu sesión</h2>
+      <p class="lead">Elige el hueco que mejor te venga para hablar con el equipo.</p>
+      <div class="calendly-inline-widget" id="calendly-embed" style="min-width:280px;height:700px;"></div>
+    </section>
+
+    <!-- Resultado: NO PASA -->
+    <section class="step" id="step-fail" data-step="fail" hidden>
+      <h2>Gracias por tu tiempo</h2>
+      <p class="lead" id="fail-message">
+        <!-- Copy pendiente de definir por el equipo (sección 5 del brief). Placeholder provisional: -->
+        Ahora mismo no encajas con el perfil que buscamos para esta convocatoria.
+        Te dejamos contenido para seguir explorando el Máster en Autoconocimiento.
+      </p>
+    </section>
+
+    <!-- Preguntas abiertas (secundarias, opcionales, tras la decisión de gate) -->
+    <section class="step" id="step-open" data-step="open" hidden>
+      <h2>Una cosa más antes de irte</h2>
+      <p class="lead">Es opcional, pero nos ayuda mucho a conocerte mejor.</p>
+      <label>
+        <span id="open-q1-text"></span>
+        <textarea id="input-open-q1" rows="3"></textarea>
+      </label>
+      <label>
+        <span id="open-q2-text"></span>
+        <textarea id="input-open-q2" rows="3"></textarea>
+      </label>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" data-action="skip-open">Saltar</button>
+        <button type="button" class="btn btn-primary" data-action="send-open">Enviar</button>
+      </div>
+    </section>
+
+    <!-- Fin -->
+    <section class="step" id="step-thanks" data-step="thanks" hidden>
+      <h2>¡Gracias!</h2>
+      <p class="lead">Hemos recibido tus respuestas.</p>
+    </section>
+
+  </main>
+
+  <footer class="brand-footer">
+    <img
+      src="https://alvaro-marketing-kuestiona-83nf.lpcontent.net/api/pages/mau-lanz-2609-registro/assets/adzfih3yowp1bvhjzbmgv5sm"
+      alt="Kuestiona"
+      width="120"
+      height="16"
+    />
+  </footer>
+
+  <script src="https://assets.calendly.com/assets/external/widget.js" defer></script>
+  <script src="js/latam.js"></script>
+  <script src="js/tracking.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

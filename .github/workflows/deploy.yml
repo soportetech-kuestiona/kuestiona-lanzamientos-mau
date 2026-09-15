@@ -1,0 +1,51 @@
+name: Deploy landing a producción
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: 31.170.102.109
+      DEPLOY_PORT: 22
+      DEPLOY_USER: kuestiona
+      DEPLOY_PATH: /home/kuestiona/precall-mau.kuestiona.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # La clave privada se carga en un ssh-agent en memoria (vía stdin de
+      # ssh-add), nunca se escribe en un fichero del runner ni se imprime.
+      - name: Cargar clave SSH en ssh-agent
+        run: |
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          ssh-add - <<< "${{ secrets.DEPLOY_SSH_KEY }}"
+        shell: bash
+
+      # StrictHostKeyChecking se queda en "yes": registramos la huella real del
+      # host con ssh-keyscan y si algún día no coincide (MITM, host reinstalado),
+      # el despliegue debe fallar, no conectar a ciegas.
+      - name: Registrar huella del host (known_hosts)
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      # Origen: site/ — es la única carpeta del repo que contiene lo que se
+      # sirve en precall-mau.kuestiona.com (HTML/CSS/JS + config/config.json).
+      # No es todo el repositorio: quedan fuera brief-landing-*.md, apps-script/,
+      # .github/ y README.md, que no tienen nada que hacer en el servidor web.
+      - name: Sincronizar site/ por rsync
+        run: |
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'node_modules' \
+            -e "ssh -p $DEPLOY_PORT -o StrictHostKeyChecking=yes" \
+            site/ \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
