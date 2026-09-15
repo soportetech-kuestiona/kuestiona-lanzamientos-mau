@@ -106,7 +106,13 @@ function handleSubmit_(config, body) {
       first_name: body.first_name,
       last_name: body.last_name,
       latam_detectado: latamDetectado,
-      resultado_gate: resultadoGate
+      resultado_gate: resultadoGate,
+      funnel_name: body.funnel_name || config.funnel_name,
+      utm_source: body.utm_source,
+      utm_medium: body.utm_medium,
+      utm_campaign: body.utm_campaign,
+      utm_content: body.utm_content,
+      utm_term: body.utm_term
     });
   }
 

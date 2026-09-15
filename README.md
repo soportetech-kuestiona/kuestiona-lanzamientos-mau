@@ -50,6 +50,15 @@ No hace falta build ni bundler: son ficheros estáticos tal cual.
 no se ha creado, modificado ni probado nada contra la cuenta real de ActiveCampaign ni
 contra ningún escenario de Make durante esta implementación.
 
+**Qué se manda a ActiveCampaign (y qué no):** contacto (email/teléfono/nombre) + tags
+(`MAU-LZ` y `LATAM`/`no-LATAM`) + automatización 20 si no cualifica + los custom fields
+`funnel_name`/UTMs listados en `ac_custom_fields` de `config.json` (IDs verificados por
+API contra la cuenta real — hay un juego de campos UTM con guion bajo al final que es
+inválido/legacy, no usarlo). Las respuestas del cuestionario (Q1-Q4, `resultado_gate`)
+**no** se mandan a AC bajo ningún concepto: viven solo en Sheets, y de ahí pasan a la
+Oportunidad de Airtable si el lead cualifica y agenda, vía la automatización de Make
+existente (fuera de alcance de esta landing).
+
 ## 3. Config centralizada (sección 6)
 
 Todo lo que cambia de un lanzamiento a otro vive en `site/config/config.json`:
