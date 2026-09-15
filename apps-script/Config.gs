@@ -1,10 +1,10 @@
 /**
  * Config centralizada (sección 6 del brief): en vez de duplicar los umbrales/textos
- * aquí, este backend lee el MISMO config/config.json que sirve la landing, vía
- * UrlFetchApp, cacheado 6h. Si el fetch falla (dominio caído, cambio de red, etc.)
- * cae a la copia embebida de más abajo como red de seguridad.
+ * aquí, este backend lee el MISMO site/config/config.json que sirve la landing,
+ * vía UrlFetchApp, cacheado 6h. Si el fetch falla (dominio caído, cambio de red,
+ * etc.) cae a la copia embebida de más abajo como red de seguridad.
  *
- * IMPORTANTE: si tocas config/config.json en el repo, súbelo a
+ * IMPORTANTE: si tocas site/config/config.json en el repo, se sube solo
  * https://precall-mau.kuestiona.com/config/config.json (el mismo fichero que usa
  * la landing) y, si cambian los gate_rules o los tags, actualiza también el
  * fallback embebido aquí para que no queden desincronizados.
@@ -36,7 +36,7 @@ function getConfig_() {
   return FALLBACK_CONFIG_;
 }
 
-// Copia de seguridad de config/config.json — mantener en sync manualmente.
+// Copia de seguridad de site/config/config.json — mantener en sync manualmente.
 const FALLBACK_CONFIG_ = {
   funnel_name: 'mau-lanz-2609',
   product_interest_id: 'autoconocimiento',

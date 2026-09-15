@@ -5,24 +5,26 @@ Implementación del brief `brief-landing-precualificacion-mau-lz.md`. Resumen de
 ## Estructura
 
 ```
-config/config.json     Config centralizada (sección 6): tags, IDs, textos de preguntas,
-                        umbrales del gate, URL de Calendly. Única fuente de verdad,
-                        usada tanto por la landing como por el Apps Script.
-site/                  Landing estática (HTML/CSS/JS, sin build).
+site/                  Carpeta de salida: TODO lo que se sirve en precall-mau.kuestiona.com,
+                        tal cual (HTML/CSS/JS + config/config.json), sin build.
+                        Es la única carpeta que se sincroniza al servidor (ver despliegue).
 apps-script/           Código del Google Apps Script Web App (backend único).
+.github/workflows/     Despliegue automático por SSH/rsync (push a main o manual).
 ```
 
 ## 1. Desplegar la landing (sección 7)
 
-1. Sube el contenido de `site/` (y la carpeta `config/` junto a él, en la misma raíz)
-   por FTP/SSH a `precall-mau.kuestiona.com`, de forma que quede:
-   ```
-   precall-mau.kuestiona.com/index.html
-   precall-mau.kuestiona.com/css/...
-   precall-mau.kuestiona.com/js/...
-   precall-mau.kuestiona.com/config/config.json
-   ```
-2. No hace falta build ni bundler: son ficheros estáticos tal cual.
+Automático vía GitHub Actions (`.github/workflows/deploy.yml`): cada push a `main`
+(o ejecución manual desde la pestaña Actions) sincroniza el contenido de `site/`
+por rsync+SSH a `/home/kuestiona/precall-mau.kuestiona.com`, dejando:
+```
+precall-mau.kuestiona.com/index.html
+precall-mau.kuestiona.com/css/...
+precall-mau.kuestiona.com/js/...
+precall-mau.kuestiona.com/config/config.json
+```
+Requiere el secret `DEPLOY_SSH_KEY` (clave privada) configurado en el repo.
+No hace falta build ni bundler: son ficheros estáticos tal cual.
 
 ## 2. Desplegar el Apps Script (backend único, sección 4)
 
@@ -38,7 +40,8 @@ apps-script/           Código del Google Apps Script Web App (backend único).
    - Ejecutar como: **Yo** (el usuario que despliega)
    - Quién tiene acceso: **Cualquier usuario**
 4. Copia la URL de la implementación (`.../exec`) y pégala en
-   `config/config.json` → `backend_web_app_url`. Vuelve a subir ese fichero al servidor.
+   `site/config/config.json` → `backend_web_app_url`. Haz commit y push a `main`
+   (el workflow de despliegue lo sube solo) o súbelo a mano si vas con prisa.
 5. El script da permiso de acceso a Sheets/UrlFetch la primera vez que se ejecuta
    (autorización estándar de Apps Script) — hazlo con una llamada de prueba antes
    de dar el lanzamiento por cerrado.
@@ -49,14 +52,14 @@ contra ningún escenario de Make durante esta implementación.
 
 ## 3. Config centralizada (sección 6)
 
-Todo lo que cambia de un lanzamiento a otro vive en `config/config.json`:
+Todo lo que cambia de un lanzamiento a otro vive en `site/config/config.json`:
 textos y opciones de las preguntas, umbrales del gate, tags de AC, ID del automation
 de "no cualifica", URL de Calendly, IDs de Sheets. El Apps Script lo lee del propio
 sitio publicado (con caché de 6h) para no duplicar lógica; si el fetch falla, usa una
 copia de seguridad embebida en `Config.gs` que hay que mantener sincronizada a mano
 si cambian los `gate_rules` o los tags.
 
-Para el próximo lanzamiento: duplica `config/config.json`, cambia los valores, despliega.
+Para el próximo lanzamiento: duplica `site/config/config.json`, cambia los valores, despliega.
 
 ## 4. Limitaciones conocidas (no son bugs)
 
@@ -87,6 +90,6 @@ Para el próximo lanzamiento: duplica `config/config.json`, cambia los valores, 
       — botón "Saltar" en `#step-open`.
 - [ ] Confirmar que la fila de Sheets tiene las columnas nuevas al final sin tocar
       las existentes — `Sheet.gs::getHeaderMap_` es idempotente y no reordena.
-- [ ] Rellenar `backend_web_app_url` en `config/config.json` con la URL real del
+- [ ] Rellenar `backend_web_app_url` en `site/config/config.json` con la URL real del
       deploy de Apps Script antes de dar el lanzamiento por cerrado.
 - [ ] Rellenar `AC_API_URL` / `AC_API_KEY` en las Propiedades del script.
