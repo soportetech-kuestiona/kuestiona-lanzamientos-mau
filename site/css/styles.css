@@ -62,6 +62,10 @@ body {
 .wizard {
   width: 100%;
   max-width: 560px;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
@@ -70,6 +74,20 @@ body {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
+
+/* Pasos con poco contenido (loading/gracias) quedaban como una caja diminuta
+   flotando en medio de mucho vacío al cambiar de paso. Con min-height + este
+   centrado, el tamaño de la tarjeta no da un salto tan brusco entre pasos. */
+.step[data-step="loading"],
+.step[data-step="thanks"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+}
+.step[data-step="loading"][hidden],
+.step[data-step="thanks"][hidden] { display: none; }
 
 h1, h2 {
   font-family: "Figtree", sans-serif;
@@ -181,11 +199,33 @@ textarea { resize: vertical; }
   margin: -10px 0 18px;
 }
 
-.brand-footer {
-  margin-top: 20px;
-  opacity: 0.85;
+.spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--highlight);
+  animation: spin 0.8s linear infinite;
 }
-.brand-footer img { display: block; height: 16px; width: auto; opacity: 0.85; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.brand-footer {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+}
+.brand-footer .brand-footer__chip {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 8px 18px;
+}
+.brand-footer img { display: block; height: 28px; width: auto; }
 
 @media (max-width: 420px) {
   .wizard { padding: 28px 20px; }
