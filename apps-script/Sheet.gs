@@ -42,51 +42,87 @@ function getHeaderMap_(sheet) {
 }
 
 function writeTextValue_(sheet, row, col, value) {
-  // Evita que Sheets interprete "+34600000000" como fórmula/número (bug de abril).
+  // Evita que Sheets interprete "+34600000000" (o un ISO de fecha) como
+  // fórmula/número y lo reformatee solo (bug de abril, y su prima con
+  // registered_at que apareció en las pruebas del lanzamiento).
   sheet.getRange(row, col).setNumberFormat('@').setValue(String(value == null ? '' : value));
 }
 
-function appendLead_(config, fields) {
-  const sheet = getLeadsSheet_(config);
-  const headerMap = getHeaderMap_(sheet);
-  const row = sheet.getLastRow() + 1;
+// Columnas que Sheets tiende a "interpretar" si no se fuerzan a texto.
+const FORCE_TEXT_COLUMNS = ['phone', 'registered_at'];
 
+function findRowByLeadId_(sheet, headerMap, leadId) {
+  const leadIdCol = headerMap['lead_id'];
+  if (!leadIdCol) return -1;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+
+  const ids = sheet.getRange(2, leadIdCol, lastRow - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (ids[i][0] === leadId) return i + 2;
+  }
+  return -1;
+}
+
+function writeRowFields_(sheet, headerMap, row, fields) {
   Object.entries(fields).forEach(([name, value]) => {
     const col = headerMap[name];
     if (!col) return; // ignora campos que no correspondan a ninguna columna conocida
-    if (name === 'phone') {
+    if (FORCE_TEXT_COLUMNS.includes(name)) {
       writeTextValue_(sheet, row, col, value);
     } else {
       sheet.getRange(row, col).setValue(value == null ? '' : value);
     }
   });
+}
 
-  return row;
+/**
+ * Upsert idempotente por lead_id (generado en el cliente): si ya existe una
+ * fila con ese lead_id, no crea una segunda — actualiza esa misma. Esto es lo
+ * que evita el duplicado cuando un usuario reintenta el envío (doble clic,
+ * "no ha pasado nada" y vuelve a pulsar, o una respuesta lenta del backend).
+ * Todo bajo un LockService para que dos peticiones casi simultáneas para el
+ * mismo lead_id no se cuelen ambas antes de que ninguna haya escrito aún.
+ *
+ * Devuelve { row, wasNew }.
+ */
+function appendOrUpdateLead_(config, leadId, fields) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = getLeadsSheet_(config);
+    const headerMap = getHeaderMap_(sheet);
+
+    const existingRow = findRowByLeadId_(sheet, headerMap, leadId);
+    if (existingRow !== -1) {
+      return { row: existingRow, wasNew: false };
+    }
+
+    const row = sheet.getLastRow() + 1;
+    writeRowFields_(sheet, headerMap, row, fields);
+    return { row, wasNew: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function updateOpenQuestionsByLeadId_(config, leadId, openQ1, openQ2) {
-  const sheet = getLeadsSheet_(config);
-  const headerMap = getHeaderMap_(sheet);
-  const leadIdCol = headerMap['lead_id'];
-  if (!leadIdCol) throw new Error('No existe la columna lead_id en la pestaña Leads');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = getLeadsSheet_(config);
+    const headerMap = getHeaderMap_(sheet);
 
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) throw new Error('No hay filas de leads todavía');
+    const foundRow = findRowByLeadId_(sheet, headerMap, leadId);
+    if (foundRow === -1) throw new Error('No se encontró lead_id ' + leadId);
 
-  const ids = sheet.getRange(2, leadIdCol, lastRow - 1, 1).getValues();
-  let foundRow = -1;
-  for (let i = 0; i < ids.length; i++) {
-    if (ids[i][0] === leadId) {
-      foundRow = i + 2;
-      break;
+    if (headerMap['open_q1_cambio_mejora']) {
+      sheet.getRange(foundRow, headerMap['open_q1_cambio_mejora']).setValue(openQ1 || '');
     }
-  }
-  if (foundRow === -1) throw new Error('No se encontró lead_id ' + leadId);
-
-  if (headerMap['open_q1_cambio_mejora']) {
-    sheet.getRange(foundRow, headerMap['open_q1_cambio_mejora']).setValue(openQ1 || '');
-  }
-  if (headerMap['open_q2_por_que_no_logrado']) {
-    sheet.getRange(foundRow, headerMap['open_q2_por_que_no_logrado']).setValue(openQ2 || '');
+    if (headerMap['open_q2_por_que_no_logrado']) {
+      sheet.getRange(foundRow, headerMap['open_q2_por_que_no_logrado']).setValue(openQ2 || '');
+    }
+  } finally {
+    lock.releaseLock();
   }
 }

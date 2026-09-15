@@ -18,8 +18,17 @@
     },
     contact: { first_name: '', last_name: '', email: '', phone: '' },
     lead_id: null,
-    resultado_gate: null
+    resultado_gate: null,
+    submitted: false,
+    openQuestionsSent: false
   };
+
+  // Mismo formato que Code.gs::generateLeadId_ — se genera aquí para no
+  // tener que esperar la respuesta del backend antes de poder identificar
+  // la fila (ni para revelar el resultado, ni para las preguntas abiertas).
+  function generateLeadId() {
+    return 'LZ-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  }
 
   const els = {};
 
@@ -95,49 +104,57 @@
     if (next) {
       showStep(next);
     } else {
-      submitAnswers();
+      submit();
     }
   }
 
-  async function submitAnswers() {
-    showStep('loading');
+  /**
+   * Revela el resultado al instante calculando el gate en el propio
+   * navegador (misma regla que el backend, ver gate.js) y SIN esperar a la
+   * llamada de red: en un lanzamiento con mucha gente rellenando el
+   * formulario a la vez, ese "un momento…" era la principal fuente de
+   * lentitud percibida. El guardado en Sheets/AC pasa a segundo plano.
+   */
+  function submit() {
+    if (state.submitted) return; // guard anti doble-envío (doble clic, reintento)
+    state.submitted = true;
+    document.querySelector('[data-action="submit"]').disabled = true;
+
+    state.lead_id = generateLeadId();
+    state.resultado_gate = window.Gate.evaluateGate(state.answers, state.latam.latam_detectado, state.config.gate_rules);
+    renderResult();
+
+    syncInBackground();
+  }
+
+  async function syncInBackground() {
     const payload = {
       type: 'submit',
+      lead_id: state.lead_id,
+      resultado_gate: state.resultado_gate,
       ...state.contact,
       ...state.tracking,
       ...state.latam,
       answers: state.answers
     };
-
     try {
-      const webAppUrl = state.config.backend_web_app_url;
-      const data = await window.Api.postToBackend(webAppUrl, payload);
-      state.lead_id = data.lead_id;
-      state.resultado_gate = data.resultado_gate;
-      renderResult(data);
+      await window.Api.postToBackend(state.config.backend_web_app_url, payload);
     } catch (err) {
-      console.error('Fallo al enviar el formulario', err);
-      showStep('fail');
-      document.getElementById('fail-message').textContent =
-        'Ha ocurrido un error al procesar tus respuestas. Por favor, inténtalo de nuevo en unos minutos.';
+      // El resultado ya se le mostró al usuario; esto solo afecta al registro
+      // en Sheets/AC. Se registra para poder detectarlo, no bloquea nada.
+      console.error('No se pudo guardar el lead en el backend', err);
     }
   }
 
-  function renderResult(data) {
-    if (data.resultado_gate) {
+  function renderResult() {
+    if (state.resultado_gate) {
       showStep('pass');
-      const calendlyUrl = new URL(data.calendly_url || state.config.calendly.url);
+      const calendlyUrl = new URL(state.config.calendly.url);
       calendlyUrl.searchParams.set('first_name', state.contact.first_name);
       calendlyUrl.searchParams.set('last_name', state.contact.last_name);
       calendlyUrl.searchParams.set('email', state.contact.email);
       calendlyUrl.searchParams.set('a1', state.contact.phone);
-
-      if (window.Calendly) {
-        window.Calendly.initInlineWidget({
-          url: calendlyUrl.toString(),
-          parentElement: document.getElementById('calendly-embed')
-        });
-      }
+      mountCalendly(calendlyUrl.toString());
     } else {
       showStep('fail');
     }
@@ -146,7 +163,39 @@
     setTimeout(() => showStep('open'), 1500);
   }
 
+  /**
+   * El widget de Calendly (assets.calendly.com/.../widget.js) lo puede
+   * bloquear un adblocker o tardar en cargar; si no aparece, en vez de dejar
+   * el hueco vacío enseñamos un enlace directo a la misma URL.
+   */
+  function mountCalendly(url, attemptsLeft) {
+    if (attemptsLeft === undefined) attemptsLeft = 20; // ~4s (20 x 200ms)
+    const container = document.getElementById('calendly-embed');
+
+    if (window.Calendly && typeof window.Calendly.initInlineWidget === 'function') {
+      window.Calendly.initInlineWidget({ url, parentElement: container });
+      return;
+    }
+    if (attemptsLeft <= 0) {
+      container.innerHTML = '';
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.className = 'btn btn-primary';
+      link.textContent = 'Reservar mi sesión';
+      container.appendChild(link);
+      return;
+    }
+    setTimeout(() => mountCalendly(url, attemptsLeft - 1), 200);
+  }
+
   async function sendOpenQuestions() {
+    if (state.openQuestionsSent) return; // guard anti doble-envío
+    state.openQuestionsSent = true;
+    document.querySelector('[data-action="send-open"]').disabled = true;
+    document.querySelector('[data-action="skip-open"]').disabled = true;
+
     const payload = {
       type: 'update_open_questions',
       lead_id: state.lead_id,
