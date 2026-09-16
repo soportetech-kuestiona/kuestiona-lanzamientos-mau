@@ -76,17 +76,16 @@ function acAddTagToContact_(contactId, tagName) {
   });
 }
 
-function acAddContactToAutomation_(contactId, automationId) {
-  acRequest_('/api/3/contactAutomations', 'POST', {
-    contactAutomation: { contact: contactId, automation: automationId }
-  });
-}
-
 /**
- * Orquesta las tres llamadas de la sección 4.2 en orden. Los tags dependen de
- * si detectamos LATAM; la automatización de "no cualifica" solo se dispara si
- * resultado_gate es false. Cualquier fallo aquí se registra pero no debe tumbar
- * la respuesta al usuario (el lead ya quedó guardado en Sheets).
+ * Etiquetado (esquema acordado, mismo que ya usa Make en la landing de
+ * registro de este lanzamiento): TODOS los leads llevan las etiquetas de
+ * config.ac_tags.universal ("mau_lead", "mau-lanz-2609"); quien NO cualifica
+ * lleva además config.ac_tags.no_cualifica ("mau-2609-nc"), que es el
+ * trigger en AC de la automatización del correo posterior — por eso ya NO
+ * se llama a ninguna automatización directamente desde aquí: si lo
+ * hiciéramos Y la etiqueta también la disparase, el contacto entraría dos
+ * veces (la automatización tiene multientry activo) y recibiría el correo
+ * duplicado.
  */
 function syncActiveCampaign_(config, lead) {
   try {
@@ -94,12 +93,12 @@ function syncActiveCampaign_(config, lead) {
     const contactId = acCreateOrUpdateContact_(lead.email, lead.phone, lead.first_name, lead.last_name, fieldValues);
     if (!contactId) return null;
 
-    acAddTagToContact_(contactId, config.ac_tags.base);
-    acAddTagToContact_(contactId, lead.latam_detectado ? config.ac_tags.latam : config.ac_tags.no_latam);
+    (config.ac_tags.universal || []).forEach((tag) => acAddTagToContact_(contactId, tag));
 
-    if (!lead.resultado_gate) {
-      acAddContactToAutomation_(contactId, config.ac_automation_no_cualifica);
+    if (!lead.resultado_gate && config.ac_tags.no_cualifica) {
+      acAddTagToContact_(contactId, config.ac_tags.no_cualifica);
     }
+
     return contactId;
   } catch (e) {
     Logger.log('Error sincronizando con ActiveCampaign para ' + lead.email + ': ' + e);

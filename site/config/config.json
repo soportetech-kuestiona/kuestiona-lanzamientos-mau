@@ -3,11 +3,10 @@
   "funnel_name": "mau-lanz-2609",
   "product_interest_id": "autoconocimiento",
   "origin": "landing-mau-lz",
-  "ac_automation_no_cualifica": 20,
   "ac_tags": {
-    "base": "MAU-LZ",
-    "latam": "LATAM",
-    "no_latam": "no-LATAM"
+    "_comment": "Mismo esquema que ya usa Make en la landing de registro de este lanzamiento (mau-lanz-2609): 'universal' va en TODOS los leads; 'no_cualifica' se añade SOLO a quien no pasa el gate, y es el trigger de la automatización del correo posterior en AC (ya no se llama a la automatización directamente desde aquí, para no duplicar el envío si la etiqueta también la dispara).",
+    "universal": ["mau_lead", "mau-lanz-2609"],
+    "no_cualifica": "mau-2609-nc"
   },
   "ac_custom_fields": {
     "_comment": "IDs reales de la cuenta de AC, verificados por API (2026-09-15). Los campos con guion bajo al final (utm_source_, utm_medium_, ...) son inválidos/legacy — no usar. NO se vuelcan aquí las respuestas del cuestionario (Q1-Q4, resultado_gate): eso vive solo en Sheets y pasa a la Oportunidad de Airtable si cualifica y agenda, vía la automatización de Make (fuera de alcance de esta landing).",
