@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/styles.css?v=3" />
 </head>
 <body>
   <div class="side-claim" aria-hidden="true">
@@ -89,12 +89,11 @@
       <p class="lead">Un momento…</p>
     </section>
 
-    <!-- Resultado: PASA -->
+    <!-- Resultado: PASA (se llega aquí tras las preguntas abiertas, ver #step-open) -->
     <section class="step" id="step-pass" data-step="pass" hidden>
       <h2>¡Perfecto! Reserva tu sesión</h2>
       <p class="lead">Elige el hueco que mejor te venga para hablar con el equipo.</p>
       <div id="calendly-cta"></div>
-      <button type="button" class="btn-link" data-action="show-open">Una cosa más antes de irte (opcional)</button>
     </section>
 
     <!-- Resultado: NO PASA -->
@@ -107,9 +106,10 @@
       </p>
     </section>
 
-    <!-- Preguntas abiertas (secundarias, opcionales, tras la decisión de gate) -->
+    <!-- Preguntas abiertas: opcionales, SOLO para quien cualifica, y SIEMPRE
+         antes del botón de reserva (nunca a la vez) -->
     <section class="step" id="step-open" data-step="open" hidden>
-      <h2>Una cosa más antes de irte</h2>
+      <h2>Antes de reservar, una cosa más</h2>
       <p class="lead">Es opcional, pero nos ayuda mucho a conocerte mejor.</p>
       <label>
         <span id="open-q1-text"></span>
@@ -125,12 +125,6 @@
       </div>
     </section>
 
-    <!-- Fin -->
-    <section class="step" id="step-thanks" data-step="thanks" hidden>
-      <h2>¡Gracias!</h2>
-      <p class="lead">Hemos recibido tus respuestas.</p>
-    </section>
-
   </main>
 
   <footer class="brand-footer">
@@ -144,10 +138,10 @@
     </span>
   </footer>
 
-  <script src="js/latam.js"></script>
-  <script src="js/gate.js"></script>
-  <script src="js/tracking.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/main.js"></script>
+  <script src="js/latam.js?v=3"></script>
+  <script src="js/gate.js?v=3"></script>
+  <script src="js/tracking.js?v=3"></script>
+  <script src="js/api.js?v=3"></script>
+  <script src="js/main.js?v=3"></script>
 </body>
 </html>
