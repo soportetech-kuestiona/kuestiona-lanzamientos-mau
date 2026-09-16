@@ -66,22 +66,22 @@ body {
   left: 5%;
   top: 50%;
   transform: translateY(-50%);
-  max-width: 300px;
+  max-width: 320px;
   z-index: 0;
 }
 .side-claim p {
   margin: 0;
   font-family: "Figtree", sans-serif;
   font-weight: 800;
-  font-size: 1.9rem;
-  line-height: 1.25;
+  font-size: 2.5rem;
+  line-height: 1.2;
   letter-spacing: -0.01em;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.95);
   text-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
 }
 /* Se oculta salvo que haya hueco garantizado a la izquierda de la tarjeta
-   (tarjeta 560px + su padding, centrada): por debajo de 1300px se solapaban. */
-@media (max-width: 1300px) {
+   (tarjeta 560px + su padding, centrada): por debajo de 1400px se solapaban. */
+@media (max-width: 1400px) {
   .side-claim { display: none; }
 }
 
@@ -103,19 +103,17 @@ body {
   -webkit-backdrop-filter: blur(18px);
 }
 
-/* Pasos con poco contenido (loading/gracias) quedaban como una caja diminuta
+/* Pasos con poco contenido (loading) quedaban como una caja diminuta
    flotando en medio de mucho vacío al cambiar de paso. Con min-height + este
    centrado, el tamaño de la tarjeta no da un salto tan brusco entre pasos. */
-.step[data-step="loading"],
-.step[data-step="thanks"] {
+.step[data-step="loading"] {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: 18px;
 }
-.step[data-step="loading"][hidden],
-.step[data-step="thanks"][hidden] { display: none; }
+.step[data-step="loading"][hidden] { display: none; }
 
 h1, h2 {
   font-family: "Figtree", sans-serif;
@@ -214,20 +212,6 @@ textarea { resize: vertical; }
   border: 1px solid var(--field-border);
 }
 .btn-secondary:hover { color: var(--text); border-color: var(--highlight); }
-
-.btn-link {
-  display: block;
-  margin: 18px auto 0;
-  background: none;
-  border: none;
-  padding: 6px;
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: 0.9rem;
-  text-decoration: underline;
-  cursor: pointer;
-}
-.btn-link:hover { color: var(--text); }
 
 #calendly-cta { margin-top: 8px; }
 

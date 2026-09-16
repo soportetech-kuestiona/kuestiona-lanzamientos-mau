@@ -42,16 +42,27 @@ function getHeaderMap_(sheet) {
 }
 
 function writeTextValue_(sheet, row, col, value) {
-  // Antepone un apóstrofo para forzar texto SIN tocar el formato de número de
-  // la celda. `setNumberFormat('@')` "arreglaba" el valor pero dejaba la
-  // celda marcada como Texto Plano de forma persistente — y Sheets extiende
-  // el formato de la última fila escrita a las filas nuevas que se añaden
-  // justo debajo, así que un lead de OTRO origen que llegara después heredaba
-  // ese formato y su fecha se veía igual de mal (reportado en el lanzamiento).
-  // El apóstrofo es solo una marca de entrada: no deja rastro en el valor
-  // guardado ni en el formato de la celda.
-  const str = String(value == null ? '' : value);
-  sheet.getRange(row, col).setValue(str.startsWith("'") ? str : "'" + str);
+  // Dos versiones probadas y descartadas antes de esta:
+  //  1) setNumberFormat('@') + setValue: fuerza bien el valor, pero deja la
+  //     celda en Texto Plano de forma PERSISTENTE, y Sheets extiende el
+  //     formato de la última fila escrita a las filas nuevas que se añaden
+  //     justo debajo — un lead de OTRO origen que llegara después heredaba
+  //     ese formato y su fecha se veía igual de mal.
+  //  2) Anteponer un apóstrofo sin tocar el formato: evita el problema
+  //     anterior, pero setValue() vía Apps Script NO respeta el apóstrofo
+  //     como marca de "esto es texto literal" igual que la UI — Sheets
+  //     seguía autodetectando la fecha y reformateándola con el formato de
+  //     columna ya existente (reportado: entra "16/09/2026 11:42:10" y se ve
+  //     "2026-09-16 11:42:05").
+  // Solución: forzar Texto Plano SOLO durante la escritura y devolver la
+  // celda a General inmediatamente después. El valor ya quedó guardado como
+  // string (no como fecha) mientras el formato era '@', así que General no
+  // lo reinterpreta al releerlo — y no queda ningún formato "pegajoso" que
+  // Sheets pueda extender a las filas siguientes.
+  const range = sheet.getRange(row, col);
+  range.setNumberFormat('@');
+  range.setValue(String(value == null ? '' : value));
+  range.setNumberFormat('General');
 }
 
 // Columnas que Sheets tiende a "interpretar" si no se fuerzan a texto.

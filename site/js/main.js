@@ -146,10 +146,16 @@
     }
   }
 
+  /**
+   * Orden del flujo (corregido tras las pruebas): quien cualifica ve PRIMERO
+   * las preguntas abiertas (opcionales) y SOLO DESPUÉS —al enviarlas o
+   * saltarlas— el botón de reserva. No pueden aparecer las dos cosas a la
+   * vez: si se enseña el botón antes y la persona se va a "una cosa más",
+   * pierde la ocasión de reservar sin haberlo hecho todavía.
+   */
   function renderResult() {
     if (state.resultado_gate) {
-      showStep('pass');
-      mountCalendlyCta();
+      showStep('open');
     } else {
       showStep('fail');
       // Sin preguntas abiertas para quien no cualifica (no tiene sentido
@@ -157,11 +163,18 @@
     }
   }
 
+  function showReserveStep() {
+    showStep('pass');
+    mountCalendlyCta();
+  }
+
   /**
    * En vez de embeber el widget de Calendly (que en pruebas reales no
    * siempre cargaba a tiempo, o desaparecía antes de poder reservar), se
-   * enseña directamente un botón a la página real de Calendly. Más simple
-   * y sin depender de que su script cargue en el navegador de cada usuario.
+   * enseña directamente un botón a la página real de Calendly. Se abre en
+   * la MISMA pestaña: una vez que la persona se va a reservar, esta landing
+   * ya no pinta nada más (Calendly la lleva a su propia página de
+   * confirmación), así que no tiene sentido gastar una pestaña nueva.
    */
   function mountCalendlyCta() {
     const calendlyUrl = new URL(state.config.calendly.url);
@@ -174,8 +187,6 @@
     container.innerHTML = '';
     const link = document.createElement('a');
     link.href = calendlyUrl.toString();
-    link.target = '_blank';
-    link.rel = 'noopener';
     link.className = 'btn btn-primary';
     link.textContent = 'Reservar mi sesión';
     container.appendChild(link);
@@ -187,10 +198,10 @@
     document.querySelector('[data-action="send-open"]').disabled = true;
     document.querySelector('[data-action="skip-open"]').disabled = true;
 
-    // Igual que en el submit principal: se revela "Gracias" al instante y el
-    // guardado va en segundo plano, para no dejar al usuario mirando un
-    // botón deshabilitado sin saber qué está pasando.
-    showStep('thanks');
+    // Igual que en el submit principal: se revela el botón de reserva al
+    // instante y el guardado va en segundo plano, para no dejar al usuario
+    // mirando un botón deshabilitado sin saber qué está pasando.
+    showReserveStep();
 
     const payload = {
       type: 'update_open_questions',
@@ -211,8 +222,7 @@
     document.querySelectorAll('[data-action="next"], [data-action="submit"]').forEach((btn) => {
       btn.addEventListener('click', () => goNext(btn.dataset.from));
     });
-    document.querySelector('[data-action="show-open"]').addEventListener('click', () => showStep('open'));
-    document.querySelector('[data-action="skip-open"]').addEventListener('click', () => showStep('thanks'));
+    document.querySelector('[data-action="skip-open"]').addEventListener('click', showReserveStep);
     document.querySelector('[data-action="send-open"]').addEventListener('click', sendOpenQuestions);
   }
 
