@@ -42,30 +42,33 @@ function getHeaderMap_(sheet) {
 }
 
 function writeTextValue_(sheet, row, col, value) {
-  // Dos versiones probadas y descartadas antes de esta:
-  //  1) setNumberFormat('@') + setValue: fuerza bien el valor, pero deja la
-  //     celda en Texto Plano de forma PERSISTENTE, y Sheets extiende el
-  //     formato de la última fila escrita a las filas nuevas que se añaden
-  //     justo debajo — un lead de OTRO origen que llegara después heredaba
-  //     ese formato y su fecha se veía igual de mal.
-  //  2) Anteponer un apóstrofo sin tocar el formato: evita el problema
-  //     anterior, pero setValue() vía Apps Script NO respeta el apóstrofo
-  //     como marca de "esto es texto literal" igual que la UI — Sheets
-  //     seguía autodetectando la fecha y reformateándola con el formato de
-  //     columna ya existente (reportado: entra "16/09/2026 11:42:10" y se ve
-  //     "2026-09-16 11:42:05").
-  // Solución: forzar Texto Plano SOLO durante la escritura y devolver la
-  // celda a General inmediatamente después. El valor ya quedó guardado como
-  // string (no como fecha) mientras el formato era '@', así que General no
-  // lo reinterpreta al releerlo — y no queda ningún formato "pegajoso" que
-  // Sheets pueda extender a las filas siguientes.
-  const range = sheet.getRange(row, col);
-  range.setNumberFormat('@');
-  range.setValue(String(value == null ? '' : value));
-  range.setNumberFormat('General');
+  // Historial de intentos fallidos (los dos dejaban rastro que Sheets
+  // extendía a las filas siguientes, escritas por OTROS orígenes como Make):
+  //  1) setNumberFormat('@') + setValue, dejando la celda en Texto Plano de
+  //     forma persistente: el bug se movía a las filas de después.
+  //  2) setNumberFormat('@') + setValue + volver a 'General': seguía dejando
+  //     un cambio de formato explícito en esta celda, y Sheets igual lo
+  //     extendía — las filas siguientes acababan en 'General' y una fecha
+  //     real (no forzada a texto) se ve en General como número de serie en
+  //     crudo (ej. "46281,57072"), que es justo lo reportado.
+  // El common denominator: CUALQUIER llamada a setNumberFormat() en esta
+  // celda, sea cual sea el valor, marca esa fila como "la última con formato
+  // explícito" y Sheets se lo copia a la fila nueva de debajo. La única
+  // forma de que esto no ocurra es no llamar a setNumberFormat() nunca desde
+  // el código — por eso esta función ya NO lo hace.
+  //
+  // Requisito (una sola vez, manual, fuera de este código): las columnas
+  // `phone` y `registered_at` deben estar formateadas como Texto Plano en
+  // TODA la columna desde el propio Sheets (seleccionar la columna entera →
+  // Formato → Número → Texto plano). Con eso, cada fila nueva ya nace en
+  // Texto Plano sin que este script tenga que tocar el formato nunca, así
+  // que no hay ningún cambio que Sheets pueda "extender" a la fila siguiente.
+  sheet.getRange(row, col).setValue(String(value == null ? '' : value));
 }
 
-// Columnas que Sheets tiende a "interpretar" si no se fuerzan a texto.
+// Columnas que deben venir PRE-formateadas como Texto Plano en todo el rango
+// de la columna (ver comentario en writeTextValue_) para que Sheets no las
+// reinterprete como fórmula/número/fecha.
 const FORCE_TEXT_COLUMNS = ['phone', 'registered_at'];
 
 function findRowByLeadId_(sheet, headerMap, leadId) {
