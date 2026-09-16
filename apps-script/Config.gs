@@ -10,7 +10,13 @@
  * fallback embebido aquí para que no queden desincronizados.
  */
 const CONFIG_CACHE_KEY = 'mau_lz_config_v1';
-const CONFIG_CACHE_TTL_SECONDS = 6 * 60 * 60;
+// 5 minutos, no 6 horas: mientras se está iterando el mismo día del
+// lanzamiento, una caché larga sirve config.json desactualizado en
+// silencio (p. ej. etiquetas de AC que dejan de mandarse porque el campo
+// que las lista ni siquiera existía en la versión cacheada). Si algún
+// cambio necesita aplicarse YA, usa clearConfigCache() de más abajo en vez
+// de esperar.
+const CONFIG_CACHE_TTL_SECONDS = 5 * 60;
 
 function getConfigUrl_() {
   const props = PropertiesService.getScriptProperties();
@@ -34,6 +40,15 @@ function getConfig_() {
   }
 
   return FALLBACK_CONFIG_;
+}
+
+/**
+ * Ejecutar a mano desde el editor de Apps Script (seleccionar esta función
+ * en el desplegable → Ejecutar) para forzar que la siguiente petición relea
+ * config.json en vez de esperar a que caduque la caché de 5 minutos.
+ */
+function clearConfigCache() {
+  CacheService.getScriptCache().remove(CONFIG_CACHE_KEY);
 }
 
 // Copia de seguridad de site/config/config.json — mantener en sync manualmente.
