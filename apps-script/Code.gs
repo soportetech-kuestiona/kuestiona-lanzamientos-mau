@@ -52,13 +52,19 @@ function evaluateGate_(answers, latamDetectado, gateRules) {
 function handleSubmit_(config, body) {
   const answers = body.answers || {};
   const latamDetectado = Boolean(body.latam_detectado);
+  // Recalculado siempre en servidor, aunque el cliente ya haya revelado un
+  // resultado (sección "revelar al instante"): esta es la fuente de verdad
+  // que se persiste y la que decide si se dispara la automatización de AC.
   const resultadoGate = evaluateGate_(answers, latamDetectado, config.gate_rules);
-  const leadId = generateLeadId_();
+  // El lead_id lo genera el cliente (para poder pintar Calendly sin esperar
+  // a esta respuesta) y viaja en el payload; si por lo que sea no llega
+  // (cliente antiguo en caché), se genera aquí como red de seguridad.
+  const leadId = body.lead_id || generateLeadId_();
   const fullName = [body.first_name, body.last_name].filter(Boolean).join(' ');
 
-  // Orden fijado en la sección 1 del brief: primero Sheets (backup crítico),
-  // luego ActiveCampaign. Si AC falla, el lead ya ha quedado guardado.
-  appendLead_(config, {
+  // Upsert por lead_id bajo lock: si esta misma petición llega duplicada
+  // (doble clic, reintento tras timeout), no crea una segunda fila.
+  const { wasNew } = appendOrUpdateLead_(config, leadId, {
     email: body.email || '',
     name: fullName,
     registered_at: new Date().toISOString(),
@@ -89,14 +95,26 @@ function handleSubmit_(config, body) {
     last_name: body.last_name || ''
   });
 
-  syncActiveCampaign_(config, {
-    email: body.email,
-    phone: body.phone,
-    first_name: body.first_name,
-    last_name: body.last_name,
-    latam_detectado: latamDetectado,
-    resultado_gate: resultadoGate
-  });
+  // Si la fila ya existía (mismo lead_id reintentado), no volvemos a tocar
+  // ActiveCampaign: create_or_update_contact/add_tag son idempotentes, pero
+  // add_contact_to_automation NO lo es — reintentarlo podría reenganchar al
+  // contacto a la automatización de "no cualificado" una segunda vez.
+  if (wasNew) {
+    syncActiveCampaign_(config, {
+      email: body.email,
+      phone: body.phone,
+      first_name: body.first_name,
+      last_name: body.last_name,
+      latam_detectado: latamDetectado,
+      resultado_gate: resultadoGate,
+      funnel_name: body.funnel_name || config.funnel_name,
+      utm_source: body.utm_source,
+      utm_medium: body.utm_medium,
+      utm_campaign: body.utm_campaign,
+      utm_content: body.utm_content,
+      utm_term: body.utm_term
+    });
+  }
 
   return jsonResponse_({
     ok: true,

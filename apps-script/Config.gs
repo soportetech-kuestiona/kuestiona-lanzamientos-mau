@@ -43,6 +43,7 @@ const FALLBACK_CONFIG_ = {
   origin: 'landing-mau-lz',
   ac_automation_no_cualifica: 20,
   ac_tags: { base: 'MAU-LZ', latam: 'LATAM', no_latam: 'no-LATAM' },
+  ac_custom_fields: { funnel_name: 6, utm_source: 12, utm_medium: 13, utm_campaign: 14, utm_content: 15, utm_term: 16 },
   sheet_id: '1HWb5k_viFg-DB0SxlDfwyKxzoYQoERQ7YqMekV3VC-I',
   sheet_tab: 'Leads',
   calendly: {

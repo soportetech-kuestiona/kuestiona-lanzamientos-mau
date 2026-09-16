@@ -11,6 +11,10 @@
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
+  <div class="side-claim" aria-hidden="true">
+    <p>Atrévete a descubrirte<br />y vivir sin parches</p>
+  </div>
+
   <main class="wizard" id="wizard">
 
     <!-- Paso 0: intro -->
@@ -44,6 +48,11 @@
       </label>
       <p class="error" id="error-contact" hidden></p>
       <button type="button" class="btn btn-primary" data-action="next-from-contact">Continuar</button>
+      <p class="legal-note">
+        🔒 Tus datos estarán a salvo. Solo los usaremos para enviarte información
+        relacionada con este evento. Ver
+        <a href="https://www.kuestiona.com/politica-de-privacidad/" target="_blank" rel="noopener">Política de Tratamiento de Datos</a>.
+      </p>
     </section>
 
     <!-- Paso 2: Q1 -->
@@ -76,6 +85,7 @@
 
     <!-- Loading -->
     <section class="step" id="step-loading" data-step="loading" hidden>
+      <div class="spinner" aria-hidden="true"></div>
       <p class="lead">Un momento…</p>
     </section>
 
@@ -83,16 +93,17 @@
     <section class="step" id="step-pass" data-step="pass" hidden>
       <h2>¡Perfecto! Reserva tu sesión</h2>
       <p class="lead">Elige el hueco que mejor te venga para hablar con el equipo.</p>
-      <div class="calendly-inline-widget" id="calendly-embed" style="min-width:280px;height:700px;"></div>
+      <div id="calendly-cta"></div>
+      <button type="button" class="btn-link" data-action="show-open">Una cosa más antes de irte (opcional)</button>
     </section>
 
     <!-- Resultado: NO PASA -->
     <section class="step" id="step-fail" data-step="fail" hidden>
-      <h2>Gracias por tu tiempo</h2>
+      <h2>¡Gracias por tus respuestas!</h2>
       <p class="lead" id="fail-message">
-        <!-- Copy pendiente de definir por el equipo (sección 5 del brief). Placeholder provisional: -->
-        Ahora mismo no encajas con el perfil que buscamos para esta convocatoria.
-        Te dejamos contenido para seguir explorando el Máster en Autoconocimiento.
+        Vamos a estudiar tu perfil con calma. En unos minutos recibirás un correo con
+        toda la información del Máster en Autoconocimiento — con eso ya podrás decidir
+        y, si quieres, agendar tu sesión directamente desde ahí.
       </p>
     </section>
 
@@ -123,16 +134,18 @@
   </main>
 
   <footer class="brand-footer">
-    <img
-      src="https://alvaro-marketing-kuestiona-83nf.lpcontent.net/api/pages/mau-lanz-2609-registro/assets/adzfih3yowp1bvhjzbmgv5sm"
-      alt="Kuestiona"
-      width="120"
-      height="16"
-    />
+    <span class="brand-footer__chip">
+      <img
+        src="https://alvaro-marketing-kuestiona-83nf.lpcontent.net/api/pages/mau-lanz-2609-registro/assets/adzfih3yowp1bvhjzbmgv5sm"
+        alt="Kuestiona"
+        width="216"
+        height="28"
+      />
+    </span>
   </footer>
 
-  <script src="https://assets.calendly.com/assets/external/widget.js" defer></script>
   <script src="js/latam.js"></script>
+  <script src="js/gate.js"></script>
   <script src="js/tracking.js"></script>
   <script src="js/api.js"></script>
   <script src="js/main.js"></script>

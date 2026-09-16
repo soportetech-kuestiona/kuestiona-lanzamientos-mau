@@ -18,8 +18,17 @@
     },
     contact: { first_name: '', last_name: '', email: '', phone: '' },
     lead_id: null,
-    resultado_gate: null
+    resultado_gate: null,
+    submitted: false,
+    openQuestionsSent: false
   };
+
+  // Mismo formato que Code.gs::generateLeadId_ — se genera aquí para no
+  // tener que esperar la respuesta del backend antes de poder identificar
+  // la fila (ni para revelar el resultado, ni para las preguntas abiertas).
+  function generateLeadId() {
+    return 'LZ-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  }
 
   const els = {};
 
@@ -95,58 +104,94 @@
     if (next) {
       showStep(next);
     } else {
-      submitAnswers();
+      submit();
     }
   }
 
-  async function submitAnswers() {
-    showStep('loading');
+  /**
+   * Revela el resultado al instante calculando el gate en el propio
+   * navegador (misma regla que el backend, ver gate.js) y SIN esperar a la
+   * llamada de red: en un lanzamiento con mucha gente rellenando el
+   * formulario a la vez, ese "un momento…" era la principal fuente de
+   * lentitud percibida. El guardado en Sheets/AC pasa a segundo plano.
+   */
+  function submit() {
+    if (state.submitted) return; // guard anti doble-envío (doble clic, reintento)
+    state.submitted = true;
+    document.querySelector('[data-action="submit"]').disabled = true;
+
+    state.lead_id = generateLeadId();
+    state.resultado_gate = window.Gate.evaluateGate(state.answers, state.latam.latam_detectado, state.config.gate_rules);
+    renderResult();
+
+    syncInBackground();
+  }
+
+  async function syncInBackground() {
     const payload = {
       type: 'submit',
+      lead_id: state.lead_id,
+      resultado_gate: state.resultado_gate,
       ...state.contact,
       ...state.tracking,
       ...state.latam,
       answers: state.answers
     };
-
     try {
-      const webAppUrl = state.config.backend_web_app_url;
-      const data = await window.Api.postToBackend(webAppUrl, payload);
-      state.lead_id = data.lead_id;
-      state.resultado_gate = data.resultado_gate;
-      renderResult(data);
+      await window.Api.postToBackend(state.config.backend_web_app_url, payload);
     } catch (err) {
-      console.error('Fallo al enviar el formulario', err);
-      showStep('fail');
-      document.getElementById('fail-message').textContent =
-        'Ha ocurrido un error al procesar tus respuestas. Por favor, inténtalo de nuevo en unos minutos.';
+      // El resultado ya se le mostró al usuario; esto solo afecta al registro
+      // en Sheets/AC. Se registra para poder detectarlo, no bloquea nada.
+      console.error('No se pudo guardar el lead en el backend', err);
     }
   }
 
-  function renderResult(data) {
-    if (data.resultado_gate) {
+  function renderResult() {
+    if (state.resultado_gate) {
       showStep('pass');
-      const calendlyUrl = new URL(data.calendly_url || state.config.calendly.url);
-      calendlyUrl.searchParams.set('first_name', state.contact.first_name);
-      calendlyUrl.searchParams.set('last_name', state.contact.last_name);
-      calendlyUrl.searchParams.set('email', state.contact.email);
-      calendlyUrl.searchParams.set('a1', state.contact.phone);
-
-      if (window.Calendly) {
-        window.Calendly.initInlineWidget({
-          url: calendlyUrl.toString(),
-          parentElement: document.getElementById('calendly-embed')
-        });
-      }
+      mountCalendlyCta();
     } else {
       showStep('fail');
+      // Sin preguntas abiertas para quien no cualifica (no tiene sentido
+      // pedírselas): el flujo termina aquí, sin más transiciones.
     }
+  }
 
-    // Preguntas abiertas: secundarias, tras la decisión, nunca bloquean (sección 2).
-    setTimeout(() => showStep('open'), 1500);
+  /**
+   * En vez de embeber el widget de Calendly (que en pruebas reales no
+   * siempre cargaba a tiempo, o desaparecía antes de poder reservar), se
+   * enseña directamente un botón a la página real de Calendly. Más simple
+   * y sin depender de que su script cargue en el navegador de cada usuario.
+   */
+  function mountCalendlyCta() {
+    const calendlyUrl = new URL(state.config.calendly.url);
+    calendlyUrl.searchParams.set('first_name', state.contact.first_name);
+    calendlyUrl.searchParams.set('last_name', state.contact.last_name);
+    calendlyUrl.searchParams.set('email', state.contact.email);
+    calendlyUrl.searchParams.set('a1', state.contact.phone);
+
+    const container = document.getElementById('calendly-cta');
+    container.innerHTML = '';
+    const link = document.createElement('a');
+    link.href = calendlyUrl.toString();
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.className = 'btn btn-primary';
+    link.textContent = 'Reservar mi sesión';
+    container.appendChild(link);
   }
 
   async function sendOpenQuestions() {
+    if (state.openQuestionsSent) return; // guard anti doble-envío
+    state.openQuestionsSent = true;
+    document.querySelector('[data-action="send-open"]').disabled = true;
+    document.querySelector('[data-action="skip-open"]').disabled = true;
+
+    // Igual que en el submit principal: se revela "Gracias" al instante y el
+    // guardado va en segundo plano, para no dejar al usuario mirando un
+    // botón deshabilitado sin saber qué está pasando.
+    showStep('thanks');
+
     const payload = {
       type: 'update_open_questions',
       lead_id: state.lead_id,
@@ -158,7 +203,6 @@
     } catch (err) {
       console.error('No se pudieron guardar las preguntas abiertas', err);
     }
-    showStep('thanks');
   }
 
   function wireEvents() {
@@ -167,6 +211,7 @@
     document.querySelectorAll('[data-action="next"], [data-action="submit"]').forEach((btn) => {
       btn.addEventListener('click', () => goNext(btn.dataset.from));
     });
+    document.querySelector('[data-action="show-open"]').addEventListener('click', () => showStep('open'));
     document.querySelector('[data-action="skip-open"]').addEventListener('click', () => showStep('thanks'));
     document.querySelector('[data-action="send-open"]').addEventListener('click', sendOpenQuestions);
   }

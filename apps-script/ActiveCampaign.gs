@@ -32,11 +32,34 @@ function acRequest_(path, method, payload) {
   throw new Error('AC API ' + path + ' -> HTTP ' + code + ': ' + res.getContentText());
 }
 
-function acCreateOrUpdateContact_(email, phone, firstName, lastName) {
-  const data = acRequest_('/api/3/contact/sync', 'POST', {
-    contact: { email, phone, firstName, lastName }
-  });
+/**
+ * fieldValues: array de {field, value} — SOLO funnel_name + UTMs (sección
+ * "Datos en AC" acordada con el usuario). Las respuestas del cuestionario
+ * (Q1-Q4, resultado_gate) NUNCA se mandan a AC: viven solo en Sheets y
+ * pasan a la Oportunidad de Airtable si el lead cualifica y agenda, vía la
+ * automatización de Make (fuera de alcance de esta landing).
+ */
+function acCreateOrUpdateContact_(email, phone, firstName, lastName, fieldValues) {
+  const contact = { email, phone, firstName, lastName };
+  if (fieldValues && fieldValues.length) contact.fieldValues = fieldValues;
+
+  const data = acRequest_('/api/3/contact/sync', 'POST', { contact });
   return data.contact && data.contact.id;
+}
+
+function buildAcFieldValues_(customFieldIds, lead) {
+  const values = {
+    funnel_name: lead.funnel_name,
+    utm_source: lead.utm_source,
+    utm_medium: lead.utm_medium,
+    utm_campaign: lead.utm_campaign,
+    utm_content: lead.utm_content,
+    utm_term: lead.utm_term
+  };
+
+  return Object.entries(customFieldIds || {})
+    .filter(([name]) => name !== '_comment' && values[name])
+    .map(([name, fieldId]) => ({ field: fieldId, value: values[name] }));
 }
 
 function acGetTagIdByName_(tagName) {
@@ -67,7 +90,8 @@ function acAddContactToAutomation_(contactId, automationId) {
  */
 function syncActiveCampaign_(config, lead) {
   try {
-    const contactId = acCreateOrUpdateContact_(lead.email, lead.phone, lead.first_name, lead.last_name);
+    const fieldValues = buildAcFieldValues_(config.ac_custom_fields, lead);
+    const contactId = acCreateOrUpdateContact_(lead.email, lead.phone, lead.first_name, lead.last_name, fieldValues);
     if (!contactId) return null;
 
     acAddTagToContact_(contactId, config.ac_tags.base);
