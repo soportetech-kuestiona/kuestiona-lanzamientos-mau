@@ -42,10 +42,16 @@ function getHeaderMap_(sheet) {
 }
 
 function writeTextValue_(sheet, row, col, value) {
-  // Evita que Sheets interprete "+34600000000" (o un ISO de fecha) como
-  // fórmula/número y lo reformatee solo (bug de abril, y su prima con
-  // registered_at que apareció en las pruebas del lanzamiento).
-  sheet.getRange(row, col).setNumberFormat('@').setValue(String(value == null ? '' : value));
+  // Antepone un apóstrofo para forzar texto SIN tocar el formato de número de
+  // la celda. `setNumberFormat('@')` "arreglaba" el valor pero dejaba la
+  // celda marcada como Texto Plano de forma persistente — y Sheets extiende
+  // el formato de la última fila escrita a las filas nuevas que se añaden
+  // justo debajo, así que un lead de OTRO origen que llegara después heredaba
+  // ese formato y su fecha se veía igual de mal (reportado en el lanzamiento).
+  // El apóstrofo es solo una marca de entrada: no deja rastro en el valor
+  // guardado ni en el formato de la celda.
+  const str = String(value == null ? '' : value);
+  sheet.getRange(row, col).setValue(str.startsWith("'") ? str : "'" + str);
 }
 
 // Columnas que Sheets tiende a "interpretar" si no se fuerzan a texto.

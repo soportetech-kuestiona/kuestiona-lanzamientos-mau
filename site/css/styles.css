@@ -59,7 +59,35 @@ body {
   body { background-image: linear-gradient(160deg, var(--bg-grad-start) 0%, var(--bg-grad-mid) 55%, var(--bg-grad-end) 100%); }
 }
 
+/* Claim de marca en el hueco vacío a la izquierda de la tarjeta (solo en
+   pantallas anchas: en estrecho no hay espacio y solaparía con la tarjeta). */
+.side-claim {
+  position: fixed;
+  left: 5%;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 300px;
+  z-index: 0;
+}
+.side-claim p {
+  margin: 0;
+  font-family: "Figtree", sans-serif;
+  font-weight: 800;
+  font-size: 1.9rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+/* Se oculta salvo que haya hueco garantizado a la izquierda de la tarjeta
+   (tarjeta 560px + su padding, centrada): por debajo de 1300px se solapaban. */
+@media (max-width: 1300px) {
+  .side-claim { display: none; }
+}
+
 .wizard {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 560px;
   min-height: 320px;
@@ -186,6 +214,30 @@ textarea { resize: vertical; }
   border: 1px solid var(--field-border);
 }
 .btn-secondary:hover { color: var(--text); border-color: var(--highlight); }
+
+.btn-link {
+  display: block;
+  margin: 18px auto 0;
+  background: none;
+  border: none;
+  padding: 6px;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.btn-link:hover { color: var(--text); }
+
+#calendly-cta { margin-top: 8px; }
+
+.legal-note {
+  margin: 14px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.legal-note a { color: var(--highlight); }
 
 .actions {
   display: flex;

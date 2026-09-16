@@ -149,45 +149,36 @@
   function renderResult() {
     if (state.resultado_gate) {
       showStep('pass');
-      const calendlyUrl = new URL(state.config.calendly.url);
-      calendlyUrl.searchParams.set('first_name', state.contact.first_name);
-      calendlyUrl.searchParams.set('last_name', state.contact.last_name);
-      calendlyUrl.searchParams.set('email', state.contact.email);
-      calendlyUrl.searchParams.set('a1', state.contact.phone);
-      mountCalendly(calendlyUrl.toString());
+      mountCalendlyCta();
     } else {
       showStep('fail');
+      // Sin preguntas abiertas para quien no cualifica (no tiene sentido
+      // pedírselas): el flujo termina aquí, sin más transiciones.
     }
-
-    // Preguntas abiertas: secundarias, tras la decisión, nunca bloquean (sección 2).
-    setTimeout(() => showStep('open'), 1500);
   }
 
   /**
-   * El widget de Calendly (assets.calendly.com/.../widget.js) lo puede
-   * bloquear un adblocker o tardar en cargar; si no aparece, en vez de dejar
-   * el hueco vacío enseñamos un enlace directo a la misma URL.
+   * En vez de embeber el widget de Calendly (que en pruebas reales no
+   * siempre cargaba a tiempo, o desaparecía antes de poder reservar), se
+   * enseña directamente un botón a la página real de Calendly. Más simple
+   * y sin depender de que su script cargue en el navegador de cada usuario.
    */
-  function mountCalendly(url, attemptsLeft) {
-    if (attemptsLeft === undefined) attemptsLeft = 20; // ~4s (20 x 200ms)
-    const container = document.getElementById('calendly-embed');
+  function mountCalendlyCta() {
+    const calendlyUrl = new URL(state.config.calendly.url);
+    calendlyUrl.searchParams.set('first_name', state.contact.first_name);
+    calendlyUrl.searchParams.set('last_name', state.contact.last_name);
+    calendlyUrl.searchParams.set('email', state.contact.email);
+    calendlyUrl.searchParams.set('a1', state.contact.phone);
 
-    if (window.Calendly && typeof window.Calendly.initInlineWidget === 'function') {
-      window.Calendly.initInlineWidget({ url, parentElement: container });
-      return;
-    }
-    if (attemptsLeft <= 0) {
-      container.innerHTML = '';
-      const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener';
-      link.className = 'btn btn-primary';
-      link.textContent = 'Reservar mi sesión';
-      container.appendChild(link);
-      return;
-    }
-    setTimeout(() => mountCalendly(url, attemptsLeft - 1), 200);
+    const container = document.getElementById('calendly-cta');
+    container.innerHTML = '';
+    const link = document.createElement('a');
+    link.href = calendlyUrl.toString();
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.className = 'btn btn-primary';
+    link.textContent = 'Reservar mi sesión';
+    container.appendChild(link);
   }
 
   async function sendOpenQuestions() {
@@ -195,6 +186,11 @@
     state.openQuestionsSent = true;
     document.querySelector('[data-action="send-open"]').disabled = true;
     document.querySelector('[data-action="skip-open"]').disabled = true;
+
+    // Igual que en el submit principal: se revela "Gracias" al instante y el
+    // guardado va en segundo plano, para no dejar al usuario mirando un
+    // botón deshabilitado sin saber qué está pasando.
+    showStep('thanks');
 
     const payload = {
       type: 'update_open_questions',
@@ -207,7 +203,6 @@
     } catch (err) {
       console.error('No se pudieron guardar las preguntas abiertas', err);
     }
-    showStep('thanks');
   }
 
   function wireEvents() {
@@ -216,6 +211,7 @@
     document.querySelectorAll('[data-action="next"], [data-action="submit"]').forEach((btn) => {
       btn.addEventListener('click', () => goNext(btn.dataset.from));
     });
+    document.querySelector('[data-action="show-open"]').addEventListener('click', () => showStep('open'));
     document.querySelector('[data-action="skip-open"]').addEventListener('click', () => showStep('thanks'));
     document.querySelector('[data-action="send-open"]').addEventListener('click', sendOpenQuestions);
   }
