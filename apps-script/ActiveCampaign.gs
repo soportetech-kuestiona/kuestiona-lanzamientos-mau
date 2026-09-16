@@ -62,18 +62,37 @@ function buildAcFieldValues_(customFieldIds, lead) {
     .map(([name, fieldId]) => ({ field: fieldId, value: values[name] }));
 }
 
-function acGetTagIdByName_(tagName) {
-  const data = acRequest_('/api/3/tags?filters[name]=' + encodeURIComponent(tagName), 'GET');
-  if (data.tags && data.tags.length) return data.tags[0].id;
-  const created = acRequest_('/api/3/tags', 'POST', { tag: { tag: tagName, tagType: 'contact' } });
-  return created.tag.id;
-}
-
+/**
+ * El id numérico de la etiqueta se busca en AC_TAG_IDS (Config.gs), NUNCA
+ * por nombre en cada petición: /api/3/tags?filters[name]=... no filtraba
+ * como cabía esperar y devolvía el id de OTRA etiqueta ya existente en la
+ * cuenta — el contacto se etiquetaba igual, pero con la etiqueta
+ * equivocada, y sin ningún error (así apareció "Formulario Enviado" en vez
+ * de "mau_lead" en las pruebas del lanzamiento).
+ *
+ * Se loguea el HTTP y el cuerpo completo de ESTA llamada siempre, no solo
+ * si lanza excepción, para poder ver el fallo exacto la próxima vez en
+ * lugar de descubrirlo por ausencia.
+ */
 function acAddTagToContact_(contactId, tagName) {
-  const tagId = acGetTagIdByName_(tagName);
-  acRequest_('/api/3/contactTags', 'POST', {
-    contactTag: { contact: contactId, tag: tagId }
+  const tagId = AC_TAG_IDS[tagName];
+  if (!tagId) {
+    Logger.log('acAddTagToContact_: no hay id numérico conocido para la etiqueta "' + tagName + '" en AC_TAG_IDS (Config.gs)');
+    return;
+  }
+
+  const { apiUrl, apiKey } = getAcCredentials_();
+  const res = UrlFetchApp.fetch(apiUrl.replace(/\/$/, '') + '/api/3/contactTags', {
+    method: 'POST',
+    contentType: 'application/json',
+    headers: { 'Api-Token': apiKey },
+    payload: JSON.stringify({ contactTag: { contact: contactId, tag: tagId } }),
+    muteHttpExceptions: true
   });
+  Logger.log(
+    'contactTags contact=' + contactId + ' tag=' + tagName + ' (id ' + tagId + ') -> ' +
+    'HTTP ' + res.getResponseCode() + ': ' + res.getContentText()
+  );
 }
 
 /**

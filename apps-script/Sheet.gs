@@ -57,19 +57,22 @@ function writeTextValue_(sheet, row, col, value) {
   // forma de que esto no ocurra es no llamar a setNumberFormat() nunca desde
   // el código — por eso esta función ya NO lo hace.
   //
-  // Requisito (una sola vez, manual, fuera de este código): las columnas
-  // `phone` y `registered_at` deben estar formateadas como Texto Plano en
-  // TODA la columna desde el propio Sheets (seleccionar la columna entera →
-  // Formato → Número → Texto plano). Con eso, cada fila nueva ya nace en
-  // Texto Plano sin que este script tenga que tocar el formato nunca, así
-  // que no hay ningún cambio que Sheets pueda "extender" a la fila siguiente.
+  // Requisito (una sola vez, manual, fuera de este código): la columna
+  // `phone` debe estar formateada como Texto Plano en TODA la columna desde
+  // el propio Sheets (seleccionar la columna entera → Formato → Número →
+  // Texto plano). Con eso, cada fila nueva ya nace en Texto Plano sin que
+  // este script tenga que tocar el formato nunca, así que no hay ningún
+  // cambio que Sheets pueda "extender" a la fila siguiente.
   sheet.getRange(row, col).setValue(String(value == null ? '' : value));
 }
 
 // Columnas que deben venir PRE-formateadas como Texto Plano en todo el rango
 // de la columna (ver comentario en writeTextValue_) para que Sheets no las
-// reinterprete como fórmula/número/fecha.
-const FORCE_TEXT_COLUMNS = ['phone', 'registered_at'];
+// reinterprete como fórmula/número. `registered_at` NO va aquí: se escribe
+// como Date real (ver Code.gs::handleSubmit_) para que quede como fecha de
+// verdad, igual que el resto de filas de DASH00 — forzarla a texto sería
+// justo el problema contrario.
+const FORCE_TEXT_COLUMNS = ['phone'];
 
 function findRowByLeadId_(sheet, headerMap, leadId) {
   const leadIdCol = headerMap['lead_id'];

@@ -67,7 +67,10 @@ function handleSubmit_(config, body) {
   const { wasNew } = appendOrUpdateLead_(config, leadId, {
     email: body.email || '',
     name: fullName,
-    registered_at: new Date().toISOString(),
+    // Date real, no un string ISO: así Sheets lo guarda como fecha (alineada
+    // a la derecha, ordenable) igual que el resto de filas de DASH00, en vez
+    // de como texto plano.
+    registered_at: new Date(),
     utm_source: body.utm_source || '',
     utm_campaign: body.utm_campaign || '',
     utm_medium: body.utm_medium || '',

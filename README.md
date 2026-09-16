@@ -90,25 +90,33 @@ Para el próximo lanzamiento: duplica `site/config/config.json`, cambia los valo
   sabe si la persona llegó a reservar en Calendly (eso lo resuelve la maquinaria
   existente, OP00, fuera de alcance — ver sección 8 del brief).
 
-## 4bis. Requisito manual en Sheets — columnas `phone` y `registered_at`
+## 4bis. Requisito manual en Sheets — columna `phone`
 
-**Antes de recibir tráfico real**, formatea a mano TODA la columna `phone` y TODA la
-columna `registered_at` como Texto Plano (seleccionar la columna entera → Formato →
-Número → Texto plano) en la pestaña `Leads`. El código YA NO llama a
-`setNumberFormat()` en ningún punto (dos intentos anteriores que sí lo hacían acabaron
-filtrando el formato a las filas de otros orígenes escritas justo después — ver
-historial de comentarios en `Sheet.gs::writeTextValue_`): depende por completo de que
-la columna ya esté en Texto Plano de antemano para no reinterpretar `+346...` o la
-fecha ISO como fórmula/número. Si alguna fila ya existente quedó con un número de
-serie en crudo (tipo `46281,57072`) por una prueba anterior, reformatear la columna no
-la arregla retroactivamente — hay que corregir esas celdas a mano.
+**Antes de recibir tráfico real**, formatea a mano TODA la columna `phone` como Texto
+Plano (seleccionar la columna entera → Formato → Número → Texto plano) en la pestaña
+`Leads`. El código YA NO llama a `setNumberFormat()` en ningún punto (dos intentos
+anteriores que sí lo hacían acabaron filtrando el formato a las filas de otros
+orígenes escritas justo después — ver historial de comentarios en
+`Sheet.gs::writeTextValue_`): depende por completo de que la columna ya esté en Texto
+Plano de antemano para no reinterpretar `+346...` como fórmula/número.
+
+`registered_at` es distinto: se escribe como `Date` real (`Code.gs::handleSubmit_`),
+no como texto — así queda como fecha de verdad, alineada a la derecha y ordenable
+igual que el resto de filas de DASH00, en vez de forzarla a texto (que era el
+problema contrario). No necesita ningún formateo manual de columna.
+
+Si alguna fila ya existente quedó con un número de serie en crudo (tipo
+`46281,57072`) por una prueba anterior, ni el formateo de columna ni el cambio de
+código la arreglan retroactivamente — hay que corregir esas celdas a mano.
 
 ## 5. Checklist antes de publicar (sección 9)
 
-- [ ] Formatear las columnas `phone` y `registered_at` como Texto Plano (ver 4bis)
-      **antes** de la primera prueba real.
+- [ ] Formatear la columna `phone` como Texto Plano (ver 4bis) **antes** de la
+      primera prueba real.
 - [ ] Probar un teléfono con "+" y confirmar que se guarda como texto en Sheets
       (columna `phone`), no como `#ERROR!` — lógica en `Sheet.gs::writeTextValue_`.
+- [ ] Confirmar que `registered_at` queda alineado a la derecha (fecha real), no a
+      la izquierda (texto), igual que el resto de filas de DASH00.
 - [ ] Probar los 4 casos límite del gate: Q1=d, Q2=c, LATAM con inversión baja/alta
       — lógica en `Code.gs::evaluateGate_`.
 - [ ] Confirmar que un prefijo LATAM con huso horario europeo, y un prefijo no-LATAM

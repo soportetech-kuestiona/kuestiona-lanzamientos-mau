@@ -51,6 +51,21 @@ function clearConfigCache() {
   CacheService.getScriptCache().remove(CONFIG_CACHE_KEY);
 }
 
+/**
+ * IDs numéricos reales de las etiquetas en esta cuenta de AC (verificados
+ * por API, 2026-09-16). Fijos aquí en vez de resueltos por nombre en cada
+ * petición: la búsqueda por nombre contra /api/3/tags (filters[name]=...)
+ * no filtraba como se esperaba y devolvía el id de otra etiqueta ya
+ * existente en la cuenta — el contacto se etiquetaba igualmente, pero con
+ * la etiqueta equivocada, sin ningún error (ver ActiveCampaign.gs).
+ * Si se crea una etiqueta nueva en AC, añadir aquí su id a mano.
+ */
+const AC_TAG_IDS = {
+  'mau_lead': 45,
+  'mau-lanz-2609': 88,
+  'mau-2609-nc': 93
+};
+
 // Copia de seguridad de site/config/config.json — mantener en sync manualmente.
 const FALLBACK_CONFIG_ = {
   funnel_name: 'mau-lanz-2609',
