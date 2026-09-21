@@ -17,6 +17,8 @@
       q4_capacidad_inversion: null
     },
     contact: { first_name: '', last_name: '', email: '', phone: '' },
+    phone_country: '', // iso2 del selector de prefijo ('es', 'mx'...): decide qué Calendly ve
+    q4_aplica: false, // Q4 (capacidad de inversión): fuera de la UE o LATAM detectado
     lead_id: null,
     resultado_gate: null,
     submitted: false,
@@ -36,6 +38,21 @@
     document.querySelectorAll('.step').forEach((el) => {
       el.hidden = el.dataset.step !== name;
     });
+    updateProgress(name);
+  }
+
+  /**
+   * Solo presentación: "Paso X de N" + barra. Q4 cuenta solo si el lead es
+   * LATAM, que se sabe tras el paso de contacto — hasta entonces N asume 4.
+   */
+  function updateProgress(name) {
+    const progress = document.getElementById('progress');
+    const steps = STEP_ORDER.filter((s) => s !== 'intro' && (s !== 'q4' || state.q4_aplica));
+    const idx = steps.indexOf(name);
+    progress.hidden = idx === -1;
+    if (idx === -1) return;
+    document.getElementById('progress-label').textContent = 'Paso ' + (idx + 1) + ' de ' + steps.length;
+    document.getElementById('progress-bar').style.transform = 'scaleX(' + (idx + 1) / steps.length + ')';
   }
 
   function nextAfter(current) {
@@ -43,7 +60,7 @@
     idx += 1;
     while (idx < STEP_ORDER.length) {
       const candidate = STEP_ORDER[idx];
-      if (candidate === 'q4' && !state.latam.latam_detectado) {
+      if (candidate === 'q4' && !state.q4_aplica) {
         idx += 1;
         continue;
       }
@@ -58,13 +75,20 @@
     const container = document.getElementById(containerId);
     container.innerHTML = '';
     Object.entries(q.options).forEach(([code, label]) => {
-      const div = document.createElement('div');
+      const div = document.createElement('button');
+      div.type = 'button';
       div.className = 'option';
+      div.setAttribute('role', 'radio');
+      div.setAttribute('aria-checked', 'false');
       div.dataset.value = code;
       div.textContent = label;
       div.addEventListener('click', () => {
-        container.querySelectorAll('.option').forEach((o) => o.classList.remove('selected'));
+        container.querySelectorAll('.option').forEach((o) => {
+          o.classList.remove('selected');
+          o.setAttribute('aria-checked', 'false');
+        });
         div.classList.add('selected');
+        div.setAttribute('aria-checked', 'true');
         state.answers[key] = code;
       });
       container.appendChild(div);
@@ -76,22 +100,74 @@
     const firstName = document.getElementById('input-first-name').value.trim();
     const lastName = document.getElementById('input-last-name').value.trim();
     const email = document.getElementById('input-email').value.trim();
-    const phone = document.getElementById('input-phone').value.trim();
+    const rawPhone = document.getElementById('input-phone').value.trim();
+    const phone = buildPhone(rawPhone);
 
-    if (!firstName || !lastName || !email || !phone) {
+    if (!firstName || !lastName || !email || !rawPhone) {
       errEl.textContent = 'Rellena todos los campos.';
       errEl.hidden = false;
       return false;
     }
-    if (!/^\+?[0-9\s()-]{6,}$/.test(phone)) {
-      errEl.textContent = 'Revisa el teléfono (usa el prefijo internacional, ej. +34).';
+    if (!phone) {
+      errEl.textContent = 'Revisa el teléfono: elige tu país y escribe el número completo.';
       errEl.hidden = false;
       return false;
     }
     errEl.hidden = true;
     state.contact = { first_name: firstName, last_name: lastName, email, phone };
+    state.phone_country = getPhoneCountry(phone);
     state.latam = window.LatamDetection.detectLatam(phone, state.config.latam_detection);
+    state.q4_aplica = state.latam.latam_detectado || !isEuPhone();
     return true;
+  }
+
+  const MIN_PHONE_DIGITS = 6;
+  let phoneInput = null; // instancia de intl-tel-input (selector de país)
+
+  /**
+   * Devuelve el teléfono en formato "+<prefijo><número>" (p.ej. +34600000000),
+   * que es lo que esperan latam.js, Sheets y el a1 de Calendly, o null si no
+   * es válido. Si la persona escribe el número ya con "+", manda lo que escribió.
+   */
+  function buildPhone(raw) {
+    if (/^\+/.test(raw)) {
+      const digits = raw.replace(/\D/g, '');
+      return digits.length >= MIN_PHONE_DIGITS + 1 ? '+' + digits : null;
+    }
+    const national = raw.replace(/\D/g, '');
+    const country = phoneInput && phoneInput.getSelectedCountry();
+    if (!country || !country.dialCode || national.length < MIN_PHONE_DIGITS) return null;
+    return '+' + country.dialCode + national;
+  }
+
+  /**
+   * País del teléfono. Se fía del selector solo si su prefijo coincide con el
+   * número final (quien escribe "+52..." a mano con España seleccionada no es
+   * de España). Si no cuadra, devuelve '' y se trata como fuera de la UE.
+   */
+  function getPhoneCountry(phone) {
+    const country = phoneInput && phoneInput.getSelectedCountry();
+    if (!country || !country.dialCode) return '';
+    return phone.startsWith('+' + country.dialCode) ? country.iso2 : '';
+  }
+
+  function initPhoneInput() {
+    if (!window.intlTelInput) return; // sin la librería el campo sigue siendo un input normal
+    phoneInput = window.intlTelInput(document.getElementById('input-phone'), {
+      initialCountry: 'es',
+      countryNameLocale: 'es', // nombres en español y orden alfabético por ellos
+      separateDialCode: true,
+      countrySearch: true,
+      uiTranslations: {
+        selectedCountryAriaLabel: 'Cambiar país, seleccionado ${countryName} (${dialCode})',
+        noCountrySelected: 'Selecciona el país',
+        countryListAriaLabel: 'Lista de países',
+        searchPlaceholder: 'Buscar país',
+        clearSearchAriaLabel: 'Borrar búsqueda',
+        searchEmptyState: 'No se han encontrado resultados',
+        searchSummaryAria: (count) => count + ' resultados'
+      }
+    });
   }
 
   function goNext(fromStep) {
@@ -121,7 +197,7 @@
     document.querySelector('[data-action="submit"]').disabled = true;
 
     state.lead_id = generateLeadId();
-    state.resultado_gate = window.Gate.evaluateGate(state.answers, state.latam.latam_detectado, state.config.gate_rules);
+    state.resultado_gate = window.Gate.evaluateGate(state.answers, state.q4_aplica, state.config.gate_rules);
     renderResult();
 
     syncInBackground();
@@ -135,6 +211,7 @@
       ...state.contact,
       ...state.tracking,
       ...state.latam,
+      q4_aplica: state.q4_aplica,
       answers: state.answers
     };
     try {
@@ -176,8 +253,18 @@
    * ya no pinta nada más (Calendly la lleva a su propia página de
    * confirmación), así que no tiene sentido gastar una pestaña nueva.
    */
+  function isEuPhone() {
+    return (state.config.calendly.eu_countries || []).includes(state.phone_country);
+  }
+
+  function getCalendlyBaseUrl() {
+    const cal = state.config.calendly;
+    if (isEuPhone() || !cal.url_fuera_ue) return cal.url;
+    return cal.url_fuera_ue;
+  }
+
   function mountCalendlyCta() {
-    const calendlyUrl = new URL(state.config.calendly.url);
+    const calendlyUrl = new URL(getCalendlyBaseUrl());
     calendlyUrl.searchParams.set('first_name', state.contact.first_name);
     calendlyUrl.searchParams.set('last_name', state.contact.last_name);
     calendlyUrl.searchParams.set('email', state.contact.email);
@@ -243,6 +330,7 @@
     document.getElementById('open-q1-text').textContent = state.config.questions.open_q1_cambio_mejora.text;
     document.getElementById('open-q2-text').textContent = state.config.questions.open_q2_por_que_no_logrado.text;
 
+    initPhoneInput();
     wireEvents();
   }
 

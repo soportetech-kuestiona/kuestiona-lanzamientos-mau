@@ -20,8 +20,16 @@
   "sheet_id": "1HWb5k_viFg-DB0SxlDfwyKxzoYQoERQ7YqMekV3VC-I",
   "sheet_tab": "Leads",
   "calendly": {
+    "_comment": "Quien cualifica va a un Calendly u otro según el país del teléfono (el elegido en el selector de prefijo). 'url' = Unión Europea (ver eu_countries); 'url_fuera_ue' = resto de países. Si url_fuera_ue está vacío, todos van a 'url'. Code.gs solo lee 'url'.",
     "event_name": "Asesoramiento - Máster en Autoconocimiento (LZ)",
-    "url": "https://calendly.com/kuestiona-team/asesoramiento-master-en-autoconocimiento-lz"
+    "url": "https://calendly.com/kuestiona-team/asesoramiento-master-en-autoconocimiento-lz",
+    "url_fuera_ue": "https://calendly.com/kuestiona-team/asesoramiento-master-en-autoconocimiento-lzl",
+    "event_name_fuera_ue": "Asesoramiento - Máster en Autoconocimiento (LZL)",
+    "eu_countries": [
+      "at", "be", "bg", "hr", "cy", "cz", "dk", "ee", "fi", "fr", "de", "gr", "hu", "ie",
+      "it", "lv", "lt", "lu", "mt", "nl", "pl", "pt", "ro", "sk", "si", "es", "se",
+      "ax", "gf", "gp", "mq", "re", "yt", "mf"
+    ]
   },
   "questions": {
     "q1_disponibilidad": {
@@ -59,7 +67,7 @@
         "c": "Entre 1.000€ y 2.000€",
         "d": "Más de 2.000€"
       },
-      "only_if_latam": true
+      "_comment": "Solo se muestra si el teléfono es de fuera de la UE (calendly.eu_countries) o se detecta LATAM por huso horario."
     },
     "open_q1_cambio_mejora": {
       "text": "¿Qué te gustaría cambiar o mejorar de ti en tu proceso de evolución personal?"
