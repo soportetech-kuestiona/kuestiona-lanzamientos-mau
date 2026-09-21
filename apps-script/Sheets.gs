@@ -87,6 +87,19 @@ function findRowByLeadId_(sheet, headerMap, leadId) {
   return -1;
 }
 
+// Cache de "lead_id -> fila" para no tener que volver a escanear toda la
+// columna lead_id (findRowByLeadId_) en cada petición bajo carga: esa columna
+// no es solo de este lanzamiento, es la de TODO el histórico de DASH00, así
+// que escanearla dentro del lock es lo que hacía que 20 envíos a la vez se
+// pisaran esperando el lock más de los 15s que le damos (visto en pruebas de
+// concurrencia reales contra producción). No sirve para evitar colisiones de
+// lead_id entre usuarios distintos (la fórmula del cliente ya las hace
+// prácticamente imposibles) — sirve solo para reconocer el reintento del
+// MISMO cliente para el MISMO lead_id sin tener que reescanear la hoja.
+function getLeadRowCacheKey_(leadId) {
+  return 'lead_row_' + leadId;
+}
+
 function writeRowFields_(sheet, headerMap, row, fields) {
   Object.entries(fields).forEach(([name, value]) => {
     const col = headerMap[name];
@@ -110,19 +123,29 @@ function writeRowFields_(sheet, headerMap, row, fields) {
  * Devuelve { row, wasNew }.
  */
 function appendOrUpdateLead_(config, leadId, fields) {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = getLeadRowCacheKey_(leadId);
+
+  const cachedRow = cache.get(cacheKey);
+  if (cachedRow) {
+    return { row: Number(cachedRow), wasNew: false };
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const sheet = getLeadsSheet_(config);
-    const headerMap = getHeaderMap_(sheet);
-
-    const existingRow = findRowByLeadId_(sheet, headerMap, leadId);
-    if (existingRow !== -1) {
-      return { row: existingRow, wasNew: false };
+    // Doble check ya dentro del lock: dos peticiones para el mismo lead_id
+    // pueden haber pasado juntas la comprobación de cache de fuera del lock.
+    const cachedRow2 = cache.get(cacheKey);
+    if (cachedRow2) {
+      return { row: Number(cachedRow2), wasNew: false };
     }
 
+    const sheet = getLeadsSheet_(config);
+    const headerMap = getHeaderMap_(sheet);
     const row = sheet.getLastRow() + 1;
     writeRowFields_(sheet, headerMap, row, fields);
+    cache.put(cacheKey, String(row), 21600); // 6h, el máximo de CacheService
     return { row, wasNew: true };
   } finally {
     lock.releaseLock();
@@ -130,14 +153,24 @@ function appendOrUpdateLead_(config, leadId, fields) {
 }
 
 function updateOpenQuestionsByLeadId_(config, leadId, openQ1, openQ2) {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = getLeadRowCacheKey_(leadId);
+
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
     const sheet = getLeadsSheet_(config);
     const headerMap = getHeaderMap_(sheet);
 
-    const foundRow = findRowByLeadId_(sheet, headerMap, leadId);
+    // Camino rápido: la fila ya está en cache porque el submit de este mismo
+    // lead_id ya se resolvió. Si no (p.ej. llega antes de que el submit haya
+    // terminado, por lo rápido que puede pulsar alguien "Enviar"), se cae al
+    // escaneo de siempre — más lento, pero solo afecta a esta petición, no
+    // encadena contención sobre las demás.
+    const cachedRow = cache.get(cacheKey);
+    const foundRow = cachedRow ? Number(cachedRow) : findRowByLeadId_(sheet, headerMap, leadId);
     if (foundRow === -1) throw new Error('No se encontró lead_id ' + leadId);
+    if (!cachedRow) cache.put(cacheKey, String(foundRow), 21600);
 
     if (headerMap['open_q1_cambio_mejora']) {
       sheet.getRange(foundRow, headerMap['open_q1_cambio_mejora']).setValue(openQ1 || '');
