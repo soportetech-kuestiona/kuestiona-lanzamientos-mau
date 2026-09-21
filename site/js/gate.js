@@ -5,16 +5,17 @@
  * de forma independiente y es la que se persiste — este cálculo aquí es
  * solo para la UI, nunca la fuente de verdad.
  *
- * PASA = (Q1 != fail) AND (Q2 != fail) AND (si es_latam: Q4 in pass_options)
+ * PASA = (Q1 != fail) AND (Q2 != fail) AND (si q4_aplica: Q4 in pass_options)
+ * q4_aplica = teléfono fuera de la UE, o LATAM detectado (ver main.js).
  * Q3 nunca entra en la regla. Los umbrales vienen de config.gate_rules, no
  * están hardcodeados aquí.
  */
-function evaluateGate(answers, latamDetectado, gateRules) {
+function evaluateGate(answers, q4Aplica, gateRules) {
   const q1Fails = (gateRules.q1_fail_options || []).includes(answers.q1_disponibilidad);
   const q2Fails = (gateRules.q2_fail_options || []).includes(answers.q2_disposicion_invertir);
 
   let q4Passes = true;
-  if (latamDetectado) {
+  if (q4Aplica) {
     q4Passes = (gateRules.q4_pass_options_if_latam || []).includes(answers.q4_capacidad_inversion);
   }
 

@@ -36,14 +36,14 @@ function generateLeadId_() {
 
 /**
  * Regla de corte (sección 2), fuente de verdad única en el backend:
- * PASA = (Q1 != fail) AND (Q2 != fail) AND (si es_latam: Q4 in pass_options)
+ * PASA = (Q1 != fail) AND (Q2 != fail) AND (si q4_aplica: Q4 in pass_options)
  * Q3 nunca entra en la regla.
  */
-function evaluateGate_(answers, latamDetectado, gateRules) {
+function evaluateGate_(answers, q4Aplica, gateRules) {
   const q1Fails = (gateRules.q1_fail_options || []).includes(answers.q1_disponibilidad);
   const q2Fails = (gateRules.q2_fail_options || []).includes(answers.q2_disposicion_invertir);
   let q4Passes = true;
-  if (latamDetectado) {
+  if (q4Aplica) {
     q4Passes = (gateRules.q4_pass_options_if_latam || []).includes(answers.q4_capacidad_inversion);
   }
   return !q1Fails && !q2Fails && q4Passes;
@@ -52,10 +52,14 @@ function evaluateGate_(answers, latamDetectado, gateRules) {
 function handleSubmit_(config, body) {
   const answers = body.answers || {};
   const latamDetectado = Boolean(body.latam_detectado);
+  // Q4 aplica a todo teléfono de fuera de la UE (y a LATAM detectado por huso
+  // horario): lo decide la landing con el país del selector de prefijo. Si
+  // no llega (landing antigua en caché), se mantiene la regla anterior: solo LATAM.
+  const q4Aplica = body.q4_aplica === undefined ? latamDetectado : Boolean(body.q4_aplica);
   // Recalculado siempre en servidor, aunque el cliente ya haya revelado un
   // resultado (sección "revelar al instante"): esta es la fuente de verdad
   // que se persiste y la que decide si se dispara la automatización de AC.
-  const resultadoGate = evaluateGate_(answers, latamDetectado, config.gate_rules);
+  const resultadoGate = evaluateGate_(answers, q4Aplica, config.gate_rules);
   // El lead_id lo genera el cliente (para poder pintar Calendly sin esperar
   // a esta respuesta) y viaja en el payload; si por lo que sea no llega
   // (cliente antiguo en caché), se genera aquí como red de seguridad.
