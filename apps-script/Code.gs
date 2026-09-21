@@ -1,6 +1,11 @@
 /**
- * Backend único (sección 4): un doPost(e) que recibe el JSON del formulario,
- * escribe en Sheets y llama a ActiveCampaign, en ese orden.
+ * Backend único (sección 4): un doPost(e) que recibe el JSON del formulario.
+ * Desde el rediseño de concurrencia (ver Buzon.gs), doPost YA NO escribe en
+ * Sheets ni llama a ActiveCampaign directamente — solo valida/calcula lo
+ * mínimo para la respuesta instantánea y encola el payload crudo en
+ * Buzon_Leads. El volcado real a Leads y el drenado a ActiveCampaign los
+ * hace volcarBuzon_() (Buzon.gs), disparado por un trigger de tiempo cada
+ * 1 minuto.
  *
  * El body llega como text/plain (ver comentario en site/js/api.js sobre por qué:
  * evita el preflight CORS que Apps Script no sabe responder), así que lo
@@ -49,6 +54,20 @@ function evaluateGate_(answers, q4Aplica, gateRules) {
   return !q1Fails && !q2Fails && q4Passes;
 }
 
+/**
+ * doPost ya NO escribe en Sheets ni llama a ActiveCampaign directamente
+ * (rediseño de concurrencia, ver Buzon.gs): solo calcula lo necesario para
+ * la respuesta instantánea al cliente y encola el payload crudo en el
+ * buzón, bajo la sección crítica más corta posible (un único appendRow en
+ * enqueueToBuzon_). El volcado real a Leads y el drenado a ActiveCampaign
+ * los hace volcarBuzon_() (Buzon.gs), una vez por minuto.
+ *
+ * El cliente NO lee resultado_gate ni calendly_url de esta respuesta para
+ * pintar nada (ya reveló el resultado por su cuenta, ver
+ * site/js/main.js::submit) — se calculan y se devuelven igualmente por
+ * compatibilidad de la API y para poder verificarlos desde fuera (p. ej.
+ * loadtest/run-api.mjs).
+ */
 function handleSubmit_(config, body) {
   const answers = body.answers || {};
   const latamDetectado = Boolean(body.latam_detectado);
@@ -56,72 +75,18 @@ function handleSubmit_(config, body) {
   // horario): lo decide la landing con el país del selector de prefijo. Si
   // no llega (landing antigua en caché), se mantiene la regla anterior: solo LATAM.
   const q4Aplica = body.q4_aplica === undefined ? latamDetectado : Boolean(body.q4_aplica);
-  // Recalculado siempre en servidor, aunque el cliente ya haya revelado un
-  // resultado (sección "revelar al instante"): esta es la fuente de verdad
-  // que se persiste y la que decide si se dispara la automatización de AC.
+  // Este cálculo es solo para la respuesta instantánea; el que de verdad se
+  // persiste lo recalcula buildLeadFields_ (Sheets.gs) en el volcado, con el
+  // config vigente en ESE momento (podría no ser exactamente el mismo si
+  // config.json cambió entre medias — riesgo aceptado, ventana de máximo 1
+  // minuto).
   const resultadoGate = evaluateGate_(answers, q4Aplica, config.gate_rules);
   // El lead_id lo genera el cliente (para poder pintar Calendly sin esperar
   // a esta respuesta) y viaja en el payload; si por lo que sea no llega
   // (cliente antiguo en caché), se genera aquí como red de seguridad.
   const leadId = body.lead_id || generateLeadId_();
-  const fullName = [body.first_name, body.last_name].filter(Boolean).join(' ');
 
-  // Upsert por lead_id bajo lock: si esta misma petición llega duplicada
-  // (doble clic, reintento tras timeout), no crea una segunda fila.
-  const { wasNew } = appendOrUpdateLead_(config, leadId, {
-    email: body.email || '',
-    name: fullName,
-    // Date real, no un string ISO: así Sheets lo guarda como fecha (alineada
-    // a la derecha, ordenable) igual que el resto de filas de DASH00, en vez
-    // de como texto plano.
-    registered_at: new Date(),
-    utm_source: body.utm_source || '',
-    utm_campaign: body.utm_campaign || '',
-    utm_medium: body.utm_medium || '',
-    utm_content: body.utm_content || '',
-    utm_term: body.utm_term || '',
-    funnel_name: body.funnel_name || config.funnel_name,
-    phone: body.phone || '',
-    fbc: body.fbc || '',
-    fbp: body.fbp || '',
-    lead_id: leadId,
-    product_interest_id: config.product_interest_id,
-    origin: config.origin,
-    gclid: body.gclid || '',
-    wbraid: body.wbraid || '',
-    gbraid: body.gbraid || '',
-    latam_detectado: latamDetectado,
-    phone_prefix_country: body.phone_prefix_country || '',
-    browser_timezone: body.browser_timezone || '',
-    q1_disponibilidad: answers.q1_disponibilidad || '',
-    q2_disposicion_invertir: answers.q2_disposicion_invertir || '',
-    q3_situacion_laboral: answers.q3_situacion_laboral || '',
-    q4_capacidad_inversion: answers.q4_capacidad_inversion || '',
-    resultado_gate: resultadoGate,
-    first_name: body.first_name || '',
-    last_name: body.last_name || ''
-  });
-
-  // Si la fila ya existía (mismo lead_id reintentado), no volvemos a tocar
-  // ActiveCampaign: create_or_update_contact/add_tag son idempotentes, pero
-  // add_contact_to_automation NO lo es — reintentarlo podría reenganchar al
-  // contacto a la automatización de "no cualificado" una segunda vez.
-  if (wasNew) {
-    syncActiveCampaign_(config, {
-      email: body.email,
-      phone: body.phone,
-      first_name: body.first_name,
-      last_name: body.last_name,
-      latam_detectado: latamDetectado,
-      resultado_gate: resultadoGate,
-      funnel_name: body.funnel_name || config.funnel_name,
-      utm_source: body.utm_source,
-      utm_medium: body.utm_medium,
-      utm_campaign: body.utm_campaign,
-      utm_content: body.utm_content,
-      utm_term: body.utm_term
-    });
-  }
+  enqueueToBuzon_(config, leadId, 'submit', Object.assign({}, body, { lead_id: leadId }));
 
   return jsonResponse_({
     ok: true,
@@ -133,6 +98,6 @@ function handleSubmit_(config, body) {
 
 function handleUpdateOpenQuestions_(config, body) {
   if (!body.lead_id) return jsonResponse_({ ok: false, error: 'Falta lead_id' });
-  updateOpenQuestionsByLeadId_(config, body.lead_id, body.open_q1_cambio_mejora, body.open_q2_por_que_no_logrado);
+  enqueueToBuzon_(config, body.lead_id, 'update_open_questions', body);
   return jsonResponse_({ ok: true });
 }
