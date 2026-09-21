@@ -41,37 +41,37 @@ function getHeaderMap_(sheet) {
   return map;
 }
 
-function writeTextValue_(sheet, row, col, value) {
-  // Historial de intentos fallidos (los dos dejaban rastro que Sheets
-  // extendía a las filas siguientes, escritas por OTROS orígenes como Make):
-  //  1) setNumberFormat('@') + setValue, dejando la celda en Texto Plano de
-  //     forma persistente: el bug se movía a las filas de después.
-  //  2) setNumberFormat('@') + setValue + volver a 'General': seguía dejando
-  //     un cambio de formato explícito en esta celda, y Sheets igual lo
-  //     extendía — las filas siguientes acababan en 'General' y una fecha
-  //     real (no forzada a texto) se ve en General como número de serie en
-  //     crudo (ej. "46281,57072"), que es justo lo reportado.
-  // El common denominator: CUALQUIER llamada a setNumberFormat() en esta
-  // celda, sea cual sea el valor, marca esa fila como "la última con formato
-  // explícito" y Sheets se lo copia a la fila nueva de debajo. La única
-  // forma de que esto no ocurra es no llamar a setNumberFormat() nunca desde
-  // el código — por eso esta función ya NO lo hace.
-  //
-  // Requisito (una sola vez, manual, fuera de este código): la columna
-  // `phone` debe estar formateada como Texto Plano en TODA la columna desde
-  // el propio Sheets (seleccionar la columna entera → Formato → Número →
-  // Texto plano). Con eso, cada fila nueva ya nace en Texto Plano sin que
-  // este script tenga que tocar el formato nunca, así que no hay ningún
-  // cambio que Sheets pueda "extender" a la fila siguiente.
-  sheet.getRange(row, col).setValue(String(value == null ? '' : value));
-}
-
 // Columnas que deben venir PRE-formateadas como Texto Plano en todo el rango
-// de la columna (ver comentario en writeTextValue_) para que Sheets no las
-// reinterprete como fórmula/número. `registered_at` NO va aquí: se escribe
-// como Date real (ver Code.gs::handleSubmit_) para que quede como fecha de
-// verdad, igual que el resto de filas de DASH00 — forzarla a texto sería
-// justo el problema contrario.
+// de la columna, para que Sheets no las reinterprete como fórmula/número
+// (p.ej. un teléfono "+34...").
+//
+// Historial de intentos fallidos (los dos dejaban rastro que Sheets extendía
+// a las filas siguientes, escritas por OTROS orígenes como Make):
+//  1) setNumberFormat('@') + setValue, dejando la celda en Texto Plano de
+//     forma persistente: el bug se movía a las filas de después.
+//  2) setNumberFormat('@') + setValue + volver a 'General': seguía dejando
+//     un cambio de formato explícito en esta celda, y Sheets igual lo
+//     extendía — las filas siguientes acababan en 'General' y una fecha
+//     real (no forzada a texto) se ve en General como número de serie en
+//     crudo (ej. "46281,57072"), que es justo lo reportado.
+// El common denominator: CUALQUIER llamada a setNumberFormat() en esta
+// celda, sea cual sea el valor, marca esa fila como "la última con formato
+// explícito" y Sheets se lo copia a la fila nueva de debajo. La única forma
+// de que esto no ocurra es no llamar a setNumberFormat() nunca desde el
+// código — por eso writeRowFields_ solo hace String(valor), nunca toca el
+// formato de la celda.
+//
+// Requisito (una sola vez, manual, fuera de este código): la columna `phone`
+// debe estar formateada como Texto Plano en TODA la columna desde el propio
+// Sheets (seleccionar la columna entera → Formato → Número → Texto plano).
+// Con eso, cada fila nueva ya nace en Texto Plano sin que este script tenga
+// que tocar el formato nunca, así que no hay ningún cambio que Sheets pueda
+// "extender" a la fila siguiente.
+//
+// `registered_at` NO va aquí: se escribe como Date real (ver
+// Code.gs::handleSubmit_) para que quede como fecha de verdad, igual que el
+// resto de filas de DASH00 — forzarla a texto sería justo el problema
+// contrario.
 const FORCE_TEXT_COLUMNS = ['phone'];
 
 function findRowByLeadId_(sheet, headerMap, leadId) {
@@ -100,16 +100,34 @@ function getLeadRowCacheKey_(leadId) {
   return 'lead_row_' + leadId;
 }
 
+// Un solo setValues() sobre todo el rango en vez de un setValue() por campo
+// (eran ~25 llamadas a la API de Sheets, una por campo, todas dentro del
+// lock: bajo carga esa cola de llamadas era el segundo cuello de botella
+// detectado en las pruebas de concurrencia, después del escaneo que ya
+// arregla getLeadRowCacheKey_). Es seguro rellenar de '' los huecos entre
+// medias porque esta función SOLO se usa para una fila recién creada
+// (sheet.getLastRow() + 1 en appendOrUpdateLead_): no hay nada previo en
+// esa fila que se pueda pisar. NO usar esta función para actualizar una
+// fila ya existente con datos reales en otras columnas.
 function writeRowFields_(sheet, headerMap, row, fields) {
-  Object.entries(fields).forEach(([name, value]) => {
-    const col = headerMap[name];
-    if (!col) return; // ignora campos que no correspondan a ninguna columna conocida
-    if (FORCE_TEXT_COLUMNS.includes(name)) {
-      writeTextValue_(sheet, row, col, value);
-    } else {
-      sheet.getRange(row, col).setValue(value == null ? '' : value);
-    }
+  const entries = Object.entries(fields)
+    .map(([name, value]) => ({ name, value, col: headerMap[name] }))
+    .filter((e) => e.col); // ignora campos que no correspondan a ninguna columna conocida
+  if (entries.length === 0) return;
+
+  const minCol = Math.min(...entries.map((e) => e.col));
+  const maxCol = Math.max(...entries.map((e) => e.col));
+  const rowValues = new Array(maxCol - minCol + 1).fill('');
+
+  entries.forEach(({ name, value, col }) => {
+    const v = value == null ? '' : value;
+    // Forzar String en el propio valor, nunca tocar el formato de la celda
+    // (ver el comentario largo junto a FORCE_TEXT_COLUMNS sobre por qué
+    // setNumberFormat() está prohibido en este fichero).
+    rowValues[col - minCol] = FORCE_TEXT_COLUMNS.includes(name) ? String(v) : v;
   });
+
+  sheet.getRange(row, minCol, 1, rowValues.length).setValues([rowValues]);
 }
 
 /**
