@@ -4,6 +4,11 @@
  * No asumimos posiciones fijas de columna: leemos la fila de cabecera y mapeamos
  * nombre -> índice. Las columnas nuevas del lanzamiento se añaden AL FINAL si no
  * existen todavía (idempotente), sin tocar ni reordenar las que ya había.
+ *
+ * Desde el rediseño del buzón (ver Buzon.gs), doPost ya NO escribe aquí
+ * directamente: solo lo hace volcarBuzon_() (Buzon.gs), una vez por minuto,
+ * en lote. Las funciones de este fichero están pensadas para eso — escribir
+ * VARIAS filas en una sola llamada, no una petición HTTP = una escritura.
  */
 const NEW_COLUMNS_ORDER = [
   'latam_detectado', 'phone_prefix_country', 'browser_timezone',
@@ -58,7 +63,7 @@ function getHeaderMap_(sheet) {
 // celda, sea cual sea el valor, marca esa fila como "la última con formato
 // explícito" y Sheets se lo copia a la fila nueva de debajo. La única forma
 // de que esto no ocurra es no llamar a setNumberFormat() nunca desde el
-// código — por eso writeRowFields_ solo hace String(valor), nunca toca el
+// código — por eso writeRowsBatch_ solo hace String(valor), nunca toca el
 // formato de la celda.
 //
 // Requisito (una sola vez, manual, fuera de este código): la columna `phone`
@@ -69,11 +74,16 @@ function getHeaderMap_(sheet) {
 // "extender" a la fila siguiente.
 //
 // `registered_at` NO va aquí: se escribe como Date real (ver
-// Code.gs::handleSubmit_) para que quede como fecha de verdad, igual que el
-// resto de filas de DASH00 — forzarla a texto sería justo el problema
-// contrario.
+// buildLeadFields_ más abajo) para que quede como fecha de verdad, igual
+// que el resto de filas de DASH00 — forzarla a texto sería justo el
+// problema contrario.
 const FORCE_TEXT_COLUMNS = ['phone'];
 
+// Usado como fallback cuando una actualización de preguntas abiertas llega
+// para un lead_id que la cache todavía no conoce (ver Buzon.gs::applyOpenQuestionsBatch_).
+// Ya no es la vía principal de deduplicación — eso lo hace CacheService
+// (getLeadRowCacheKey_) — pero sigue siendo necesario como red de seguridad,
+// así que se mantiene tal cual.
 function findRowByLeadId_(sheet, headerMap, leadId) {
   const leadIdCol = headerMap['lead_id'];
   if (!leadIdCol) return -1;
@@ -87,124 +97,193 @@ function findRowByLeadId_(sheet, headerMap, leadId) {
   return -1;
 }
 
-// Cache de "lead_id -> fila" para no tener que volver a escanear toda la
-// columna lead_id (findRowByLeadId_) en cada petición bajo carga: esa columna
-// no es solo de este lanzamiento, es la de TODO el histórico de DASH00, así
-// que escanearla dentro del lock es lo que hacía que 20 envíos a la vez se
-// pisaran esperando el lock más de los 15s que le damos (visto en pruebas de
-// concurrencia reales contra producción). No sirve para evitar colisiones de
-// lead_id entre usuarios distintos (la fórmula del cliente ya las hace
-// prácticamente imposibles) — sirve solo para reconocer el reintento del
-// MISMO cliente para el MISMO lead_id sin tener que reescanear la hoja.
+// Cache de "lead_id -> fila" en Leads. La pone writeSubmitsBatch_ justo
+// después de escribir cada fila nueva; la lee applyOpenQuestionsBatch_ para
+// no tener que escanear toda la columna lead_id (findRowByLeadId_) — esa
+// columna es la de TODO el histórico de DASH00, no solo la de este
+// lanzamiento, y escanearla es caro. También evita volver a escribir un
+// lead_id que ya se volcó en un ciclo anterior si por lo que sea su fila del
+// buzón no llegó a borrarse.
 function getLeadRowCacheKey_(leadId) {
   return 'lead_row_' + leadId;
 }
 
-// Un solo setValues() sobre todo el rango en vez de un setValue() por campo
-// (eran ~25 llamadas a la API de Sheets, una por campo, todas dentro del
-// lock: bajo carga esa cola de llamadas era el segundo cuello de botella
-// detectado en las pruebas de concurrencia, después del escaneo que ya
-// arregla getLeadRowCacheKey_). Es seguro rellenar de '' los huecos entre
-// medias porque esta función SOLO se usa para una fila recién creada
-// (sheet.getLastRow() + 1 en appendOrUpdateLead_): no hay nada previo en
-// esa fila que se pueda pisar. NO usar esta función para actualizar una
-// fila ya existente con datos reales en otras columnas.
-function writeRowFields_(sheet, headerMap, row, fields) {
-  const entries = Object.entries(fields)
-    .map(([name, value]) => ({ name, value, col: headerMap[name] }))
-    .filter((e) => e.col); // ignora campos que no correspondan a ninguna columna conocida
-  if (entries.length === 0) return;
+/**
+ * A partir del payload crudo de un 'submit' (tal cual llegó al buzón) más la
+ * hora real de recepción (no la del volcado, que puede ir hasta 1 minuto por
+ * detrás), construye el objeto de campos -> valor para escribir en Leads.
+ * Antes vivía en Code.gs::handleSubmit_; se mueve aquí porque ahora quien
+ * escribe en Sheets es volcarBuzon_(), no doPost.
+ */
+function buildLeadFields_(config, receivedAt, payload) {
+  const answers = payload.answers || {};
+  const latamDetectado = Boolean(payload.latam_detectado);
+  // Misma regla que antes: si no llega q4_aplica (payload antiguo en cache
+  // de cliente), se cae a la regla previa (solo LATAM).
+  const q4Aplica = payload.q4_aplica === undefined ? latamDetectado : Boolean(payload.q4_aplica);
+  const resultadoGate = evaluateGate_(answers, q4Aplica, config.gate_rules);
+  const fullName = [payload.first_name, payload.last_name].filter(Boolean).join(' ');
 
-  const minCol = Math.min(...entries.map((e) => e.col));
-  const maxCol = Math.max(...entries.map((e) => e.col));
-  const rowValues = new Array(maxCol - minCol + 1).fill('');
+  const fields = {
+    email: payload.email || '',
+    name: fullName,
+    registered_at: receivedAt,
+    utm_source: payload.utm_source || '',
+    utm_campaign: payload.utm_campaign || '',
+    utm_medium: payload.utm_medium || '',
+    utm_content: payload.utm_content || '',
+    utm_term: payload.utm_term || '',
+    funnel_name: payload.funnel_name || config.funnel_name,
+    phone: payload.phone || '',
+    fbc: payload.fbc || '',
+    fbp: payload.fbp || '',
+    lead_id: payload.lead_id,
+    product_interest_id: config.product_interest_id,
+    origin: config.origin,
+    gclid: payload.gclid || '',
+    wbraid: payload.wbraid || '',
+    gbraid: payload.gbraid || '',
+    latam_detectado: latamDetectado,
+    phone_prefix_country: payload.phone_prefix_country || '',
+    browser_timezone: payload.browser_timezone || '',
+    q1_disponibilidad: answers.q1_disponibilidad || '',
+    q2_disposicion_invertir: answers.q2_disposicion_invertir || '',
+    q3_situacion_laboral: answers.q3_situacion_laboral || '',
+    q4_capacidad_inversion: answers.q4_capacidad_inversion || '',
+    resultado_gate: resultadoGate,
+    first_name: payload.first_name || '',
+    last_name: payload.last_name || ''
+  };
 
-  entries.forEach(({ name, value, col }) => {
-    const v = value == null ? '' : value;
-    // Forzar String en el propio valor, nunca tocar el formato de la celda
-    // (ver el comentario largo junto a FORCE_TEXT_COLUMNS sobre por qué
-    // setNumberFormat() está prohibido en este fichero).
-    rowValues[col - minCol] = FORCE_TEXT_COLUMNS.includes(name) ? String(v) : v;
-  });
-
-  sheet.getRange(row, minCol, 1, rowValues.length).setValues([rowValues]);
+  return { fields, resultadoGate, latamDetectado };
 }
 
 /**
- * Upsert idempotente por lead_id (generado en el cliente): si ya existe una
- * fila con ese lead_id, no crea una segunda — actualiza esa misma. Esto es lo
- * que evita el duplicado cuando un usuario reintenta el envío (doble clic,
- * "no ha pasado nada" y vuelve a pulsar, o una respuesta lenta del backend).
- * Todo bajo un LockService para que dos peticiones casi simultáneas para el
- * mismo lead_id no se cuelen ambas antes de que ninguna haya escrito aún.
+ * Une varias filas (una por lead) en un único setValues(), calculando el
+ * rango de columnas común a todas según headerMap. Sustituye al antiguo
+ * writeRowFields_ (una fila = una llamada): ahora una sola llamada escribe
+ * TODO el lote del volcado, sea de 1 lead o de 90.
  *
- * Devuelve { row, wasNew }.
+ * Igual que antes: es seguro rellenar de '' los huecos entre columnas
+ * porque esta función SOLO se usa para filas recién creadas — nunca para
+ * actualizar una fila ya existente con datos reales en otras columnas.
  */
-function appendOrUpdateLead_(config, leadId, fields) {
-  const cache = CacheService.getScriptCache();
-  const cacheKey = getLeadRowCacheKey_(leadId);
+function writeRowsBatch_(sheet, headerMap, startRow, fieldsArray) {
+  if (fieldsArray.length === 0) return;
 
-  const cachedRow = cache.get(cacheKey);
-  if (cachedRow) {
-    return { row: Number(cachedRow), wasNew: false };
-  }
+  let minCol = Infinity;
+  let maxCol = -Infinity;
+  fieldsArray.forEach((fields) => {
+    Object.keys(fields).forEach((name) => {
+      const col = headerMap[name];
+      if (!col) return;
+      if (col < minCol) minCol = col;
+      if (col > maxCol) maxCol = col;
+    });
+  });
+  if (!isFinite(minCol)) return; // ningún campo del lote mapea a una columna conocida
 
-  const lock = LockService.getScriptLock();
-  lock.waitLock(15000);
-  try {
-    // Doble check ya dentro del lock: dos peticiones para el mismo lead_id
-    // pueden haber pasado juntas la comprobación de cache de fuera del lock.
-    const cachedRow2 = cache.get(cacheKey);
-    if (cachedRow2) {
-      return { row: Number(cachedRow2), wasNew: false };
-    }
+  const width = maxCol - minCol + 1;
+  const values = fieldsArray.map((fields) => {
+    const row = new Array(width).fill('');
+    Object.entries(fields).forEach(([name, value]) => {
+      const col = headerMap[name];
+      if (!col) return;
+      const v = value == null ? '' : value;
+      row[col - minCol] = FORCE_TEXT_COLUMNS.includes(name) ? String(v) : v;
+    });
+    return row;
+  });
 
-    const sheet = getLeadsSheet_(config);
-    const headerMap = getHeaderMap_(sheet);
-    const row = sheet.getLastRow() + 1;
-    writeRowFields_(sheet, headerMap, row, fields);
-    // Sin este flush, SpreadsheetApp puede diferir la escritura: la siguiente
-    // petición que entre al lock podría leer getLastRow() SIN ver todavía
-    // esta fila, calcular el mismo número de fila, y pisarla (visto en
-    // pruebas de concurrencia reales: dos lead_id distintos acabaron en la
-    // misma celda). El flush fuerza a que la escritura esté aplicada de
-    // verdad antes de soltar el lock, para que el próximo getLastRow() la vea.
-    SpreadsheetApp.flush();
-    cache.put(cacheKey, String(row), 21600); // 6h, el máximo de CacheService
-    return { row, wasNew: true };
-  } finally {
-    lock.releaseLock();
-  }
+  sheet.getRange(startRow, minCol, values.length, width).setValues(values);
 }
 
-function updateOpenQuestionsByLeadId_(config, leadId, openQ1, openQ2) {
+/**
+ * Escribe en Leads todos los 'submit' nuevos de un lote del buzón, en una
+ * sola llamada a setValues() para el lote entero. Se llama desde dentro del
+ * lock de volcarBuzon_(), que ya garantiza que solo hay un volcado a la vez
+ * — por eso basta un único getLastRow() para todo el lote, no uno por lead.
+ *
+ * Devuelve, por cada entrada de `submits`, { leadId, wasNew, row,
+ * resultadoGate, payload } — así drainToActiveCampaign_ (ActiveCampaign.gs)
+ * sabe a quién sincronizar (solo wasNew=true) sin volver a tocar Sheets.
+ */
+function writeSubmitsBatch_(config, submits) {
   const cache = CacheService.getScriptCache();
-  const cacheKey = getLeadRowCacheKey_(leadId);
+  const results = [];
+  const seenInBatch = new Set();
+  const toWrite = []; // { leadId, fields, resultadoGate, payload }
 
-  const lock = LockService.getScriptLock();
-  lock.waitLock(15000);
-  try {
-    const sheet = getLeadsSheet_(config);
-    const headerMap = getHeaderMap_(sheet);
+  submits.forEach(({ leadId, receivedAt, payload }) => {
+    if (!leadId || seenInBatch.has(leadId) || cache.get(getLeadRowCacheKey_(leadId))) {
+      // Duplicado dentro del mismo lote, o ya volcado en un ciclo anterior
+      // (su fila del buzón no debería seguir aquí, pero por si acaso no se
+      // vuelve a escribir ni se vuelve a mandar a AC).
+      results.push({ leadId, wasNew: false, payload });
+      return;
+    }
+    seenInBatch.add(leadId);
+    const { fields, resultadoGate } = buildLeadFields_(config, receivedAt, payload);
+    toWrite.push({ leadId, fields, resultadoGate, payload });
+  });
 
-    // Camino rápido: la fila ya está en cache porque el submit de este mismo
-    // lead_id ya se resolvió. Si no (p.ej. llega antes de que el submit haya
-    // terminado, por lo rápido que puede pulsar alguien "Enviar"), se cae al
-    // escaneo de siempre — más lento, pero solo afecta a esta petición, no
-    // encadena contención sobre las demás.
-    const cachedRow = cache.get(cacheKey);
-    const foundRow = cachedRow ? Number(cachedRow) : findRowByLeadId_(sheet, headerMap, leadId);
-    if (foundRow === -1) throw new Error('No se encontró lead_id ' + leadId);
-    if (!cachedRow) cache.put(cacheKey, String(foundRow), 21600);
+  if (toWrite.length === 0) return results;
 
+  const sheet = getLeadsSheet_(config);
+  const headerMap = getHeaderMap_(sheet);
+  const startRow = sheet.getLastRow() + 1;
+  writeRowsBatch_(sheet, headerMap, startRow, toWrite.map((e) => e.fields));
+  // Mismo motivo que en el fix de la colisión de filas: sin flush, el
+  // próximo getLastRow() (de este mismo volcado o del siguiente) podría no
+  // ver esta escritura todavía.
+  SpreadsheetApp.flush();
+
+  toWrite.forEach((entry, i) => {
+    const row = startRow + i;
+    cache.put(getLeadRowCacheKey_(entry.leadId), String(row), 21600); // 6h, el máximo de CacheService
+    results.push({ leadId: entry.leadId, wasNew: true, row, resultadoGate: entry.resultadoGate, payload: entry.payload });
+  });
+
+  return results;
+}
+
+/**
+ * Aplica las respuestas de preguntas abiertas de un lote del buzón,
+ * localizando la fila de cada lead_id por cache (rápido) o, si no está
+ * todavía, por escaneo (findRowByLeadId_ — más lento, pero es la excepción,
+ * no la regla: solo pasa si esta actualización llegó al buzón antes de que
+ * su 'submit' correspondiente se haya volcado, algo que en la práctica no
+ * debería pasar salvo reordenación muy rara entre lotes).
+ *
+ * Nota consciente: si un lead_id no se encuentra, esta actualización se
+ * pierde (queda solo un log de aviso) — volcarBuzon_() borra el lote entero
+ * del buzón al final, con éxito o sin él en casos sueltos como este. Es un
+ * riesgo aceptado: afecta solo a las preguntas abiertas (opcionales), nunca
+ * al lead en sí, que siempre se procesa primero en writeSubmitsBatch_.
+ */
+function applyOpenQuestionsBatch_(config, openQuestions) {
+  if (openQuestions.length === 0) return;
+  const cache = CacheService.getScriptCache();
+  const sheet = getLeadsSheet_(config);
+  const headerMap = getHeaderMap_(sheet);
+
+  openQuestions.forEach(({ leadId, payload }) => {
+    const cachedRow = cache.get(getLeadRowCacheKey_(leadId));
+    const row = cachedRow ? Number(cachedRow) : findRowByLeadId_(sheet, headerMap, leadId);
+    if (row === -1) {
+      Logger.log(
+        'applyOpenQuestionsBatch_: no se encontró lead_id ' + leadId +
+        ' (si su submit está en este mismo lote debería haberse resuelto; si no, se pierde esta actualización opcional)'
+      );
+      return;
+    }
     if (headerMap['open_q1_cambio_mejora']) {
-      sheet.getRange(foundRow, headerMap['open_q1_cambio_mejora']).setValue(openQ1 || '');
+      sheet.getRange(row, headerMap['open_q1_cambio_mejora']).setValue(payload.open_q1_cambio_mejora || '');
     }
     if (headerMap['open_q2_por_que_no_logrado']) {
-      sheet.getRange(foundRow, headerMap['open_q2_por_que_no_logrado']).setValue(openQ2 || '');
+      sheet.getRange(row, headerMap['open_q2_por_que_no_logrado']).setValue(payload.open_q2_por_que_no_logrado || '');
     }
-    SpreadsheetApp.flush(); // ver el comentario en appendOrUpdateLead_
-  } finally {
-    lock.releaseLock();
-  }
+  });
+
+  SpreadsheetApp.flush();
 }
