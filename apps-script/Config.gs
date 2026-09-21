@@ -75,6 +75,7 @@ const FALLBACK_CONFIG_ = {
   ac_custom_fields: { funnel_name: 6, utm_source: 12, utm_medium: 13, utm_campaign: 14, utm_content: 15, utm_term: 16 },
   sheet_id: '1HWb5k_viFg-DB0SxlDfwyKxzoYQoERQ7YqMekV3VC-I',
   sheet_tab: 'Leads',
+  buzon_sheet_id: '1cmn9kHQGn_tgWwuxlrUx1AHAbem9UNnQEAHmxDQs2Pw',
   calendly: {
     event_name: 'Asesoramiento - Máster en Autoconocimiento (LZ)',
     url: 'https://calendly.com/kuestiona-team/asesoramiento-master-en-autoconocimiento-lz'
