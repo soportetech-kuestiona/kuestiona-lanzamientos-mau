@@ -19,6 +19,8 @@
   },
   "sheet_id": "1HWb5k_viFg-DB0SxlDfwyKxzoYQoERQ7YqMekV3VC-I",
   "sheet_tab": "Leads",
+  "buzon_sheet_id": "1cmn9kHQGn_tgWwuxlrUx1AHAbem9UNnQEAHmxDQs2Pw",
+  "_comment_buzon": "Buzon_Leads vive en un Sheet propio y pequeño, separado de sheet_id (DASH00, con años de histórico y varias pestañas): abrir DASH00 por ID en cada doPost para solo hacer un appendRow era el cuello de botella bajo carga concurrente. El volcado periódico (Buzon.gs::volcarBuzon) sigue escribiendo en Leads dentro de sheet_id como siempre, una vez por minuto.",
   "calendly": {
     "_comment": "Quien cualifica va a un Calendly u otro según el país del teléfono (el elegido en el selector de prefijo). 'url' = Unión Europea (ver eu_countries); 'url_fuera_ue' = resto de países. Si url_fuera_ue está vacío, todos van a 'url'. Code.gs solo lee 'url'.",
     "event_name": "Asesoramiento - Máster en Autoconocimiento (LZ)",

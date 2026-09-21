@@ -16,12 +16,23 @@
  * Objetivo de diseño: soportar ráfagas de hasta 27 peticiones en 10s dentro
  * de una ventana de 90 en 60s (x3 sobre el pico real del lanzamiento
  * anterior). No está pensado para más volumen que ese sin confirmarlo antes.
+ *
+ * Buzon_Leads vive en su propio Google Sheet (config.buzon_sheet_id), NO en
+ * el mismo archivo que Leads (config.sheet_id, DASH00) — ver el porqué en
+ * el comentario de getBuzonSheet_ más abajo.
  */
 const BUZON_TAB_NAME = 'Buzon_Leads';
 
 /**
- * Pestaña de staging, en la MISMA hoja que Leads (config.sheet_id). Hay que
- * crearla A MANO UNA VEZ, con esta cabecera exacta en la fila 1:
+ * Pestaña de staging, en un Google Sheet PROPIO y pequeño
+ * (config.buzon_sheet_id), separado a propósito de Leads (config.sheet_id,
+ * el DASH00 compartido con años de histórico y varias pestañas). Medido en
+ * pruebas de carga reales: abrir DASH00 por ID en cada doPost, solo para
+ * hacer un appendRow, ya era en sí mismo el cuello de botella bajo 20
+ * peticiones concurrentes — el archivo pequeño se abre mucho más rápido.
+ *
+ * Hay que crearla A MANO UNA VEZ en ese Sheet propio, con esta cabecera
+ * exacta en la fila 1:
  *   received_at | lead_id | type | payload_json
  * No se crea sola por código a propósito: así un despliegue sin este paso
  * previo falla alto y claro (error explícito en los logs / en la respuesta
@@ -29,12 +40,13 @@ const BUZON_TAB_NAME = 'Buzon_Leads';
  * decidido a propósito.
  */
 function getBuzonSheet_(config) {
-  const ss = SpreadsheetApp.openById(config.sheet_id);
+  const ss = SpreadsheetApp.openById(config.buzon_sheet_id);
   const sheet = ss.getSheetByName(BUZON_TAB_NAME);
   if (!sheet) {
     throw new Error(
-      'No existe la pestaña "' + BUZON_TAB_NAME + '" — créala a mano una vez, ' +
-      'con esta cabecera en la fila 1: received_at | lead_id | type | payload_json'
+      'No existe la pestaña "' + BUZON_TAB_NAME + '" en el Sheet ' + config.buzon_sheet_id +
+      ' — créala a mano una vez, con esta cabecera en la fila 1: ' +
+      'received_at | lead_id | type | payload_json'
     );
   }
   return sheet;
