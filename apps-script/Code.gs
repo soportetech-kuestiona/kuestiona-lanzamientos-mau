@@ -4,7 +4,7 @@
  * Sheets ni llama a ActiveCampaign directamente — solo valida/calcula lo
  * mínimo para la respuesta instantánea y encola el payload crudo en
  * Buzon_Leads. El volcado real a Leads y el drenado a ActiveCampaign los
- * hace volcarBuzon_() (Buzon.gs), disparado por un trigger de tiempo cada
+ * hace volcarBuzon() (Buzon.gs), disparado por un trigger de tiempo cada
  * 1 minuto.
  *
  * El body llega como text/plain (ver comentario en site/js/api.js sobre por qué:
@@ -60,7 +60,7 @@ function evaluateGate_(answers, q4Aplica, gateRules) {
  * la respuesta instantánea al cliente y encola el payload crudo en el
  * buzón, bajo la sección crítica más corta posible (un único appendRow en
  * enqueueToBuzon_). El volcado real a Leads y el drenado a ActiveCampaign
- * los hace volcarBuzon_() (Buzon.gs), una vez por minuto.
+ * los hace volcarBuzon() (Buzon.gs), una vez por minuto.
  *
  * El cliente NO lee resultado_gate ni calendly_url de esta respuesta para
  * pintar nada (ya reveló el resultado por su cuenta, ver

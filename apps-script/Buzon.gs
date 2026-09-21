@@ -3,8 +3,8 @@
  * ni llama a ActiveCampaign directamente: valida lo mínimo y encola el
  * payload crudo aquí, bajo la sección crítica más corta posible (un único
  * appendRow()). El volcado real a Leads y el drenado a ActiveCampaign los
- * hace volcarBuzon_(), disparado por un trigger de tiempo cada 1 minuto
- * (instalado a mano una vez con instalarTriggerVolcado_, ver más abajo).
+ * hace volcarBuzon(), disparado por un trigger de tiempo cada 1 minuto
+ * (instalado a mano una vez con instalarTriggerVolcado, ver más abajo).
  *
  * Motivo del cambio: LockService.getScriptLock() es global a todo el
  * proyecto (no por hoja) y Apps Script limita a 30 ejecuciones simultáneas
@@ -72,16 +72,23 @@ function enqueueToBuzon_(config, leadId, type, payload) {
 /**
  * Instalar UNA VEZ desde el editor de Apps Script (seleccionar esta función
  * en el desplegable de arriba -> Ejecutar) después de desplegar este
- * código. Borra cualquier trigger anterior de volcarBuzon_ antes de crear
+ * código. Borra cualquier trigger anterior de volcarBuzon antes de crear
  * el nuevo, para no acabar con dos triggers duplicados corriendo el doble
  * de veces por error.
+ *
+ * SIN guion bajo al final a propósito (a diferencia del resto de funciones
+ * "privadas" de este proyecto): Apps Script oculta de los desplegables de
+ * "Ejecutar" y del selector de función de un activador cualquier función
+ * cuyo nombre termine en "_" — con guion bajo, ni esta ni volcarBuzon
+ * podrían seleccionarse nunca desde la interfaz, que es precisamente para
+ * lo que existen.
  */
-function instalarTriggerVolcado_() {
+function instalarTriggerVolcado() {
   ScriptApp.getProjectTriggers()
-    .filter((t) => t.getHandlerFunction() === 'volcarBuzon_')
+    .filter((t) => t.getHandlerFunction() === 'volcarBuzon')
     .forEach((t) => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('volcarBuzon_').timeBased().everyMinutes(1).create();
-  Logger.log('Trigger instalado: volcarBuzon_ cada 1 minuto.');
+  ScriptApp.newTrigger('volcarBuzon').timeBased().everyMinutes(1).create();
+  Logger.log('Trigger instalado: volcarBuzon cada 1 minuto.');
 }
 
 /**
@@ -103,10 +110,10 @@ function instalarTriggerVolcado_() {
  * el caso de que alguien duplique el trigger por error), este ciclo se
  * salta sin esperar; el siguiente minuto recoge lo que haya quedado.
  */
-function volcarBuzon_() {
+function volcarBuzon() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(0)) {
-    Logger.log('volcarBuzon_: ya hay un volcado en curso, se salta este ciclo.');
+    Logger.log('volcarBuzon: ya hay un volcado en curso, se salta este ciclo.');
     return;
   }
 
@@ -127,7 +134,7 @@ function volcarBuzon_() {
       try {
         payload = JSON.parse(payloadJson);
       } catch (e) {
-        Logger.log('volcarBuzon_: JSON inválido para lead_id=' + leadId + ': ' + e);
+        Logger.log('volcarBuzon: JSON inválido para lead_id=' + leadId + ': ' + e);
         return;
       }
       if (type === 'submit') submits.push({ leadId, receivedAt, payload });
