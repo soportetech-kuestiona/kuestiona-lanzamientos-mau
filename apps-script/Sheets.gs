@@ -6,7 +6,7 @@
  * existen todavía (idempotente), sin tocar ni reordenar las que ya había.
  *
  * Desde el rediseño del buzón (ver Buzon.gs), doPost ya NO escribe aquí
- * directamente: solo lo hace volcarBuzon_() (Buzon.gs), una vez por minuto,
+ * directamente: solo lo hace volcarBuzon() (Buzon.gs), una vez por minuto,
  * en lote. Las funciones de este fichero están pensadas para eso — escribir
  * VARIAS filas en una sola llamada, no una petición HTTP = una escritura.
  */
@@ -113,7 +113,7 @@ function getLeadRowCacheKey_(leadId) {
  * hora real de recepción (no la del volcado, que puede ir hasta 1 minuto por
  * detrás), construye el objeto de campos -> valor para escribir en Leads.
  * Antes vivía en Code.gs::handleSubmit_; se mueve aquí porque ahora quien
- * escribe en Sheets es volcarBuzon_(), no doPost.
+ * escribe en Sheets es volcarBuzon(), no doPost.
  */
 function buildLeadFields_(config, receivedAt, payload) {
   const answers = payload.answers || {};
@@ -201,7 +201,7 @@ function writeRowsBatch_(sheet, headerMap, startRow, fieldsArray) {
 /**
  * Escribe en Leads todos los 'submit' nuevos de un lote del buzón, en una
  * sola llamada a setValues() para el lote entero. Se llama desde dentro del
- * lock de volcarBuzon_(), que ya garantiza que solo hay un volcado a la vez
+ * lock de volcarBuzon(), que ya garantiza que solo hay un volcado a la vez
  * — por eso basta un único getLastRow() para todo el lote, no uno por lead.
  *
  * Devuelve, por cada entrada de `submits`, { leadId, wasNew, row,
@@ -256,7 +256,7 @@ function writeSubmitsBatch_(config, submits) {
  * debería pasar salvo reordenación muy rara entre lotes).
  *
  * Nota consciente: si un lead_id no se encuentra, esta actualización se
- * pierde (queda solo un log de aviso) — volcarBuzon_() borra el lote entero
+ * pierde (queda solo un log de aviso) — volcarBuzon() borra el lote entero
  * del buzón al final, con éxito o sin él en casos sueltos como este. Es un
  * riesgo aceptado: afecta solo a las preguntas abiertas (opcionales), nunca
  * al lead en sí, que siempre se procesa primero en writeSubmitsBatch_.

@@ -133,7 +133,7 @@ function syncActiveCampaign_(config, lead, throttleFn) {
 
 /**
  * Drenado hacia ActiveCampaign de un lote de leads recién volcados (ver
- * Buzon.gs::volcarBuzon_). Se llama YA FUERA del LockService del volcado —
+ * Buzon.gs::volcarBuzon). Se llama YA FUERA del LockService del volcado —
  * este ritmo de 5 req/s puede tardar varios segundos en un lote grande, y
  * no tiene sentido retener un lock global (que bloquearía el appendRow de
  * cualquier doPost concurrente) durante ese tiempo.
