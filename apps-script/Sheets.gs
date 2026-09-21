@@ -163,6 +163,13 @@ function appendOrUpdateLead_(config, leadId, fields) {
     const headerMap = getHeaderMap_(sheet);
     const row = sheet.getLastRow() + 1;
     writeRowFields_(sheet, headerMap, row, fields);
+    // Sin este flush, SpreadsheetApp puede diferir la escritura: la siguiente
+    // petición que entre al lock podría leer getLastRow() SIN ver todavía
+    // esta fila, calcular el mismo número de fila, y pisarla (visto en
+    // pruebas de concurrencia reales: dos lead_id distintos acabaron en la
+    // misma celda). El flush fuerza a que la escritura esté aplicada de
+    // verdad antes de soltar el lock, para que el próximo getLastRow() la vea.
+    SpreadsheetApp.flush();
     cache.put(cacheKey, String(row), 21600); // 6h, el máximo de CacheService
     return { row, wasNew: true };
   } finally {
@@ -196,6 +203,7 @@ function updateOpenQuestionsByLeadId_(config, leadId, openQ1, openQ2) {
     if (headerMap['open_q2_por_que_no_logrado']) {
       sheet.getRange(foundRow, headerMap['open_q2_por_que_no_logrado']).setValue(openQ2 || '');
     }
+    SpreadsheetApp.flush(); // ver el comentario en appendOrUpdateLead_
   } finally {
     lock.releaseLock();
   }
