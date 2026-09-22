@@ -109,6 +109,24 @@ function getLeadRowCacheKey_(leadId) {
 }
 
 /**
+ * Traduce el código de respuesta (a/b/c/d/e) al texto completo de la opción,
+ * tal y como está en config.json en ESE momento — para que a los closers les
+ * llegue algo legible en vez de una letra suelta. El gate (evaluateGate_)
+ * sigue comparando por código, siempre, antes de esta traducción: aquí solo
+ * se decide qué se ESCRIBE en Leads, nunca qué decide el resultado.
+ *
+ * Si el código no viene vacío pero no se reconoce entre las opciones
+ * actuales de config.json (p. ej. cliente antiguo en caché con una
+ * pregunta ya cambiada), se guarda el código tal cual en vez de perder el
+ * dato o guardar "undefined".
+ */
+function answerText_(config, questionKey, code) {
+  if (!code) return '';
+  const options = config.questions && config.questions[questionKey] && config.questions[questionKey].options;
+  return (options && options[code]) || code;
+}
+
+/**
  * A partir del payload crudo de un 'submit' (tal cual llegó al buzón) más la
  * hora real de recepción (no la del volcado, que puede ir hasta 1 minuto por
  * detrás), construye el objeto de campos -> valor para escribir en Leads.
@@ -146,10 +164,10 @@ function buildLeadFields_(config, receivedAt, payload) {
     latam_detectado: latamDetectado,
     phone_prefix_country: payload.phone_prefix_country || '',
     browser_timezone: payload.browser_timezone || '',
-    q1_disponibilidad: answers.q1_disponibilidad || '',
-    q2_disposicion_invertir: answers.q2_disposicion_invertir || '',
-    q3_situacion_laboral: answers.q3_situacion_laboral || '',
-    q4_capacidad_inversion: answers.q4_capacidad_inversion || '',
+    q1_disponibilidad: answerText_(config, 'q1_disponibilidad', answers.q1_disponibilidad),
+    q2_disposicion_invertir: answerText_(config, 'q2_disposicion_invertir', answers.q2_disposicion_invertir),
+    q3_situacion_laboral: answerText_(config, 'q3_situacion_laboral', answers.q3_situacion_laboral),
+    q4_capacidad_inversion: answerText_(config, 'q4_capacidad_inversion', answers.q4_capacidad_inversion),
     resultado_gate: resultadoGate,
     first_name: payload.first_name || '',
     last_name: payload.last_name || ''
