@@ -72,7 +72,16 @@ function enqueueToBuzon_(config, leadId, type, payload) {
   try {
     if (cache.get(seenKey)) return { enqueued: false }; // doble check ya dentro del lock
     const sheet = getBuzonSheet_(config);
-    sheet.appendRow([new Date(), leadId, type, JSON.stringify(payload)]);
+    // received_at se guarda como NÚMERO (ms desde epoch, Date.getTime()), NO
+    // como objeto Date: un Date real que pasa por appendRow() se interpreta
+    // según el huso horario propio de ESTE Sheet (buzon_sheet_id), que puede
+    // no coincidir con el de DASH00 (donde vive Leads) — un Sheet creado por
+    // API sin locale explícito puede acabar en America/Los_Angeles por
+    // defecto en vez del huso real de la cuenta. Un número no tiene huso que
+    // interpretar mal; se reconstruye como Date real (sin ambigüedad
+    // ninguna: new Date(ms) siempre es el mismo instante) en volcarBuzon(),
+    // ya con destino a Leads en DASH00.
+    sheet.appendRow([new Date().getTime(), leadId, type, JSON.stringify(payload)]);
     SpreadsheetApp.flush();
     cache.put(seenKey, '1', 1200); // 20 min: cubre de sobra el único reintento del cliente (~30s)
     return { enqueued: true };
@@ -141,7 +150,7 @@ function volcarBuzon() {
 
     const submits = [];
     const openQuestions = [];
-    rows.forEach(([receivedAt, leadId, type, payloadJson]) => {
+    rows.forEach(([receivedAtMs, leadId, type, payloadJson]) => {
       let payload;
       try {
         payload = JSON.parse(payloadJson);
@@ -149,6 +158,11 @@ function volcarBuzon() {
         Logger.log('volcarBuzon: JSON inválido para lead_id=' + leadId + ': ' + e);
         return;
       }
+      // new Date(ms) es siempre el mismo instante exacto, sin ambigüedad de
+      // huso horario (ver comentario en enqueueToBuzon_): esta es la ÚNICA
+      // vez que el timestamp se convierte a un objeto Date real, con
+      // destino a Leads en DASH00.
+      const receivedAt = new Date(receivedAtMs);
       if (type === 'submit') submits.push({ leadId, receivedAt, payload });
       else if (type === 'update_open_questions') openQuestions.push({ leadId, payload });
     });
