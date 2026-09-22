@@ -79,6 +79,40 @@ function getHeaderMap_(sheet) {
 // problema contrario.
 const FORCE_TEXT_COLUMNS = ['phone'];
 
+// DASH00 (donde vive Leads) tiene su huso horario configurado como
+// America/Los_Angeles en vez de Europe/Madrid — un desajuste de
+// configuración de todo el documento, de siempre, no de este código. No se
+// corrige cambiando el huso del documento: eso reinterpretaría la hora de
+// TODO el histórico de la hoja (no solo Leads) y podría afectar a cómo el
+// escenario de Make OP00 lee otras columnas de fecha de ahí — decisión
+// consciente de no tocarlo.
+//
+// Si algún día se corrige el huso horario de DASH00 desde Sheets, esta
+// constante hay que actualizarla (o quitar toSheetLocalDate_ por completo,
+// si ya coincide con Europe/Madrid).
+const LEADS_SHEET_TIMEZONE = 'America/Los_Angeles';
+
+/**
+ * En vez de eso: construye deliberadamente un objeto Date cuyo INSTANTE
+ * ABSOLUTO es "incorrecto", calculado para que, al mostrarse a través del
+ * huso (equivocado) de DASH00, los DÍGITOS que aparecen en la celda
+ * coincidan con la hora real de Madrid en el momento de la escritura. Es
+ * el mismo truco que, implícitamente, ya sigue el resto de filas de esta
+ * hoja: lo que se lee en pantalla es la hora real de Madrid, aunque la
+ * etiqueta de huso horario del documento diga Pacífico.
+ *
+ * Se autoajusta a los cambios de horario de verano de cada país (no es un
+ * offset fijo): calcula el desfase real entre Madrid y sheetTimeZone EN
+ * ESE INSTANTE exacto, no una constante fija.
+ */
+function toSheetLocalDate_(realDate, sheetTimeZone) {
+  const madridTimeZone = Session.getScriptTimeZone(); // 'Europe/Madrid', ver appsscript.json
+  const digits = Utilities.formatDate(realDate, madridTimeZone, "yyyy-MM-dd'T'HH:mm:ss");
+  const offset = Utilities.formatDate(realDate, sheetTimeZone, 'Z'); // ej. "-0700"
+  const offsetIso = offset.slice(0, 3) + ':' + offset.slice(3); // "-07:00"
+  return new Date(digits + offsetIso);
+}
+
 // Usado como fallback cuando una actualización de preguntas abiertas llega
 // para un lead_id que la cache todavía no conoce (ver Buzon.gs::applyOpenQuestionsBatch_).
 // Ya no es la vía principal de deduplicación — eso lo hace CacheService
@@ -145,7 +179,7 @@ function buildLeadFields_(config, receivedAt, payload) {
   const fields = {
     email: payload.email || '',
     name: fullName,
-    registered_at: receivedAt,
+    registered_at: toSheetLocalDate_(receivedAt, LEADS_SHEET_TIMEZONE),
     utm_source: payload.utm_source || '',
     utm_campaign: payload.utm_campaign || '',
     utm_medium: payload.utm_medium || '',
